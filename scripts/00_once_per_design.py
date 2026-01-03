@@ -67,7 +67,7 @@ def once_per_design_flow(design_name, clock_period , clock_port):
         design_dir=".",
         pdk="sky130A"
     )
-    flow.start()
+    flow.start(tag=design_name+"base")
 
 
 once_per_design_flow("picorv32" , 10.0 , "clk")
