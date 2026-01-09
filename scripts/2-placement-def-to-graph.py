@@ -90,7 +90,7 @@ logic_map = {}
 for line in lines:
     if "PLACED" in line:
         for gate_name in neighbor_targets:
-            # We look for "- _09865_ " to ensure an exact match
+            # For eg: We look for "- _09865_ " to ensure an exact match
             if f"- {gate_name} " in line:
                 coord_match = re.search(r'\(\s+(\d+)\s+(\d+)\s+\)', line)
                 if coord_match:
