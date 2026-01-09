@@ -29,14 +29,61 @@ raw_block = get_all_clock_consuming_flops(def_text, clock_port)
 # print("--- Strict Clock Net Block ---")
 # print(raw_block)
 
-instances = re.findall(r'\(\s+((?!PIN)\S+)\s+CLK\s+\)', raw_block)
-print(len(instances))
+all_flops = re.findall(r'\(\s+((?!PIN)\S+)\s+CLK\s+\)', raw_block)
 
 
-# print(f"Total connections found: {len(instances)}")
-# print(f"HashSet (unique instances) size: {len(flop_set)}")
+# first_entry = all_flops[0]
 
 
+import re
+
+flop_data = {}
+lines = def_text.splitlines()
+
+# Using a set of target strings for exact matching in the COMPONENTS section
+targets = {f"- {flop} " for flop in all_flops}
+
+#find coordinates for each flop
+for line in lines:
+    if "PLACED" in line:
+        for target in targets:
+            if target in line:
+                # 1. Extract the name from the target string
+                clean_name = target.strip("- ").strip()
+                
+                # 2. Extract X and Y using regex
+                coord_match = re.search(r'\(\s+(\d+)\s+(\d+)\s+\)', line)
+                if coord_match:
+                    x = int(coord_match.group(1))
+                    y = int(coord_match.group(2))
+                    
+                    # 3. Store the tuple of integers
+                    flop_data[clean_name] = {
+                        "coords": (x, y),
+                        "is_flip_flop": True
+                    }
+                
+                break 
+
+for first_entry in all_flops:
+    q_pattern = rf'-\s+\S+\s+[^;]*?\(\s+{re.escape(first_entry)}\s+Q\s+\)[^;]*?;'
+    q_match = re.search(q_pattern, def_text, re.DOTALL)
+    q_line = " ".join(q_match.group(0).split())
+
+    print(q_line)
+
+
+# nets_start = def_text.find("NETS")
+# nets_end = def_text.find("END NETS")
+# nets_section = def_text[nets_start:nets_end]
+
+# print(nets_section)
+
+
+
+# for name, data in flop_data.items():
+#     coords = data["coords"]
+#     print(f"Flop: {name:10} | Coordinates: X={coords[0]:<8} Y={coords[1]:<8} |  is_flip_flop: {data['is_flip_flop']}")
 
 
 # print(def_text)
