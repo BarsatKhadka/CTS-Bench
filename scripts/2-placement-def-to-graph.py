@@ -32,7 +32,9 @@ raw_block = get_all_clock_consuming_flops(def_text, clock_port)
 all_flops = re.findall(r'\(\s+((?!PIN)\S+)\s+CLK\s+\)', raw_block)
 
 
-# first_entry = all_flops[0]
+first_entry = all_flops[0]
+
+print(first_entry)
 
 
 import re
@@ -65,12 +67,50 @@ for line in lines:
                 
                 break 
 
-for first_entry in all_flops:
-    q_pattern = rf'-\s+\S+\s+[^;]*?\(\s+{re.escape(first_entry)}\s+Q\s+\)[^;]*?;'
-    q_match = re.search(q_pattern, def_text, re.DOTALL)
-    q_line = " ".join(q_match.group(0).split())
 
-    print(q_line)
+d_pattern = rf'-\s+\S+\s+[^;]*?\(\s+{re.escape(first_entry)}\s+D\s+\)[^;]*?;'
+d_match = re.search(d_pattern, def_text, re.DOTALL)
+d_line = " ".join(d_match.group(0).split())
+
+q_pattern = rf'-\s+\S+\s+[^;]*?\(\s+{re.escape(first_entry)}\s+Q\s+\)[^;]*?;'
+q_match = re.search(q_pattern, def_text, re.DOTALL)
+q_line = " ".join(q_match.group(0).split())
+
+d_instances = re.findall(r'\(\s+(\S+)\s+\S+\s+\)', d_line)
+q_instances = re.findall(r'\(\s+(\S+)\s+\S+\s+\)', q_line)
+
+
+fan_in = [inst for inst in d_instances if inst != first_entry and re.match(r'_\d+_', inst)]
+fan_out = [inst for inst in q_instances if inst != first_entry and re.match(r'_\d+_', inst)]
+
+neighbor_targets = set(fan_in + fan_out)
+logic_map = {}
+
+# Re-scanning the lines for these specific target names
+for line in lines:
+    if "PLACED" in line:
+        for gate_name in neighbor_targets:
+            # We look for "- _09865_ " to ensure an exact match
+            if f"- {gate_name} " in line:
+                coord_match = re.search(r'\(\s+(\d+)\s+(\d+)\s+\)', line)
+                if coord_match:
+                    x = int(coord_match.group(1))
+                    y = int(coord_match.group(2))
+                    
+                    logic_map[gate_name] = {
+                        "coords": (x, y),
+                        "is_flip_flop": False
+                    }
+                break 
+
+
+print(logic_map)
+print
+# print(d_line)
+# print(q_line)
+
+
+    # print(q_line)
 
 
 # nets_start = def_text.find("NETS")
