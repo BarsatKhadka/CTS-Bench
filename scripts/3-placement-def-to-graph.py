@@ -3,13 +3,13 @@ import re
 filename = "picorv32_run_20260107_145745"
 design_name = filename.split("_")[0]
 
-def load_def():
-    path = f"./runs/{filename}/11-openroad-detailedplacement/{design_name}.def"
+def load_file(path):
     with open(path, "r") as f:
         return f.read()
 
 #the whole def file loaded
-def_text = load_def()
+def_text = load_file(path = f"./runs/{filename}/11-openroad-detailedplacement/{design_name}.def")
+
 
 clock_port = "clk"
 
@@ -104,8 +104,73 @@ for line in lines:
                 break 
 
 
+
 print(logic_map)
-print
+
+#for every flipflop and logic , extract their saif toggle count 
+SAIF_FILE_LOCATION = f"./runs/{filename}/{design_name}.saif"
+SAIF_FILE = load_file(SAIF_FILE_LOCATION)
+
+
+targets = set(logic_map.keys()) | set(flop_data.keys())
+
+print(f"--- Extracting Data-Only Toggle Counts for {len(targets)} Instances ---")
+
+# Pre-compile regex for speed
+start_pattern = re.compile(r'\(INSTANCE\s+([a-zA-Z0-9_]+)')
+tc_pattern = re.compile(r'\(TC\s+(\d+)\)')
+
+# 2. Scan the SAIF file string once
+for match in start_pattern.finditer(SAIF_FILE):
+    gate_name = match.group(1)
+    
+    # Only process if this instance is in our target list
+    if gate_name in targets:
+        
+        # --- A. ISOLATE THE BLOCK ---
+        start_index = match.start()
+        current_index = start_index
+        balance = 0
+        
+        # Find the closing parenthesis for this instance block
+        while current_index < len(SAIF_FILE):
+            char = SAIF_FILE[current_index]
+            if char == '(':
+                balance += 1
+            elif char == ')':
+                balance -= 1
+                if balance == 0:
+                    break
+            current_index += 1
+            
+        # Get the full text block
+        full_block = SAIF_FILE[start_index : current_index + 1]
+        
+        # --- B. EXTRACT MAX TC (IGNORING CLOCK) ---
+        max_tc = 0
+        
+        for line in full_block.splitlines():
+            # 1. Look for a Toggle Count on this line
+            tc_match = tc_pattern.search(line)
+            if tc_match:
+                # 2. SAFETY CHECK: Ignore Clock lines
+                if "CLK" in line.upper() or "CLOCK" in line.upper():
+                    continue 
+                
+                # 3. Find Max
+                tc_val = int(tc_match.group(1))
+                if tc_val > max_tc:
+                    max_tc = tc_val
+        
+        # --- C. UPDATE THE DICTIONARIES ---
+        # We don't know which dict it belongs to, so we try both.
+        # This is safe because keys are unique across the design.
+        if gate_name in logic_map:
+            logic_map[gate_name]['toggle_count'] = max_tc
+        elif gate_name in flop_data:
+            flop_data[gate_name]['toggle_count'] = max_tc
+
+
 # print(d_line)
 # print(q_line)
 
