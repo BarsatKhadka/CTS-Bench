@@ -74,7 +74,7 @@ def build_connectivity_graph(def_text, all_flops):
 def extract_saif_data(saif_text, design_data):
     targets = set(design_data.keys())
     
-    # Your preferred Regex patterns
+    # preferred Regex patterns
     start_pattern = re.compile(r'\(INSTANCE\s+([a-zA-Z0-9_]+)')
     tc_pattern = re.compile(r'\(TC\s+(\d+)\)')
 
