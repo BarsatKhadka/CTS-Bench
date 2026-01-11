@@ -7,6 +7,20 @@ def load_file_content(filepath):
             return f.read()
     except FileNotFoundError:
         return None
+    
+def extract_die_area(def_text):
+    for line in def_text.splitlines():
+        if line.startswith("DIEAREA"):
+            # Extract numbers inside parentheses
+            # This finds all sequences of digits
+            nums = re.findall(r'\d+', line)
+            if len(nums) == 4:
+                die_x_min = int(nums[0])
+                die_y_min = int(nums[1])
+                die_x_max = int(nums[2])
+                die_y_max = int(nums[3])
+                return die_x_min, die_y_min, die_x_max, die_y_max
+    return RuntimeError("DIEAREA not found in DEF file")
 
 
 def build_connectivity_graph(def_text, all_flops):
@@ -114,6 +128,11 @@ def process_design(filename, clock_port="clk"):
     
     def_text = load_file_content(f"{base_path}/11-openroad-detailedplacement/{design_name}.def")
     saif_text = load_file_content(f"{base_path}/{design_name}.saif")
+
+    x_min, y_min, x_max, y_max = extract_die_area(def_text)
+    x_range = x_max - x_min
+    y_range = y_max - y_min
+
     
     # 1. Identify Flops (Using your clock block logic)
     clock_pattern = rf'-\s+{re.escape(clock_port)}\s+\(\s+PIN\s+{re.escape(clock_port)}\s+\).*?;'
@@ -129,10 +148,18 @@ def process_design(filename, clock_port="clk"):
         if "PLACED" in line:
             m = coord_pattern.search(line)
             if m and m.group(1) in design_data:
-                design_data[m.group(1)]["coords"] = (int(m.group(2)), int(m.group(3)))
+                raw_x = int(m.group(2))
+                raw_y = int(m.group(3))
+                
+                # Normalize coordinates to [0, 1] range
+                # We subtract x_min/y_min in case the die doesn't start at (0,0)
+                norm_x = (raw_x - x_min) / x_range if x_range > 0 else 0
+                norm_y = (raw_y - y_min) / y_range if y_range > 0 else 0
+                
+                design_data[m.group(1)]["coords"] = (norm_x, norm_y)
                 
     # 4. Toggles
     design_data = extract_saif_data(saif_text, design_data)
     
-    return design_data
+    return design_data 
 
