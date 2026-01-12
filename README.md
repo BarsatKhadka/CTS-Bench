@@ -22,3 +22,22 @@ min max normalization
 x - x(min) / x(max) - x(min)  , similarly for y 
 
 where x(min) , x(max) are extracted from DIE AREA (x, y) (x,y) of the design
+
+
+We use log scaling to normalize toggle counts.
+prevents high-activity nets from dominating the gradient updates
+
+change nix-shell's shell.nix to 
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  buildInputs = [
+    pkgs.python311
+    pkgs.python311Packages.numpy
+    pkgs.gcc
+  ];
+
+  shellHook = ''
+    echo "Python environment ready with NumPy"
+  '';
+}

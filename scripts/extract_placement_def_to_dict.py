@@ -1,4 +1,5 @@
 import re
+import numpy as np
 
 
 def load_file_content(filepath):
@@ -118,7 +119,7 @@ def extract_saif_data(saif_text, design_data):
                     val = int(tc_match.group(1))
                     if val > max_tc: max_tc = val
             
-            design_data[gate_name]["toggle_count"] = max_tc
+            design_data[gate_name]["toggle_count"] = np.log1p(max_tc)
     return design_data
 
 #main wrapper
@@ -157,7 +158,7 @@ def process_design(filename, clock_port="clk"):
                 norm_y = (raw_y - y_min) / y_range if y_range > 0 else 0
                 
                 design_data[m.group(1)]["coords"] = (norm_x, norm_y)
-                
+                 
     # 4. Toggles
     design_data = extract_saif_data(saif_text, design_data)
     
