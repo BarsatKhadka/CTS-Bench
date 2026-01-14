@@ -27,17 +27,14 @@ where x(min) , x(max) are extracted from DIE AREA (x, y) (x,y) of the design
 We use log scaling to normalize toggle counts.
 prevents high-activity nets from dominating the gradient updates
 
-change nix-shell's shell.nix to 
-{ pkgs ? import <nixpkgs> {} }:
+update flake.nix of your openlane , which i will provide.
 
-pkgs.mkShell {
-  buildInputs = [
-    pkgs.python311
-    pkgs.python311Packages.numpy
-    pkgs.gcc
-  ];
 
-  shellHook = ''
-    echo "Python environment ready with NumPy"
-  '';
-}
+Nodes (V): Every standard cell (Logic or Flip-Flop) is a node.
+
+Edges (E): Directed connections from fan_in to the current node, and from the current node to fan_out.
+
+Node Features (X): A vector [x,y,is_ff,toggle_count].
+
+Edge Features (Eattr​): The Manhattan Distance (∣x1​−x2​∣+∣y1​−y2​∣) between connected cells.
+manhattan distance because two edges are directed to represent the flow and direction. So absolute value of two coordinates would work fine.
