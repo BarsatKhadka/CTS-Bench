@@ -73,3 +73,22 @@ Gravity Vector (The "Force")
         Vector (+10,0): "I am being pulled hard to the Right."
 
         Vector (0,+2): "I am being pulled slightly Up."
+
+
+Clustering execution flow
+
+first make 1 flipflop = 1 cluster with its 1 hop logic gates
+
+
+then start to compare flipflop clusters 
+
+first based on the reset pin 
+
+then manhattan distance
+
+then average gravity vector
+
+
+if that passess all then merge those two for a new cluster 
+
+

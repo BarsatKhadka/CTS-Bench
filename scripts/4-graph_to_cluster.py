@@ -1,6 +1,6 @@
 from extract_placement_def_to_dict import process_design
 
-FILENAME = "picorv32_run_20260107_145745" 
+FILENAME = "picorv32_run_20260107_145745"
 
 design_data  = process_design(FILENAME, clock_port="clk")
 

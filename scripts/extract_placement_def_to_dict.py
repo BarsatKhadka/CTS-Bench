@@ -171,6 +171,60 @@ def calculate_gravity_vectors(design_data):
 
     return design_data
 
+def add_reset_net_to_flops(design_data, def_text):
+    """
+    Scans the NETS section to find which net is connected to the RESET_B pin of each Flip-Flop.
+    Assigns 'NO_RESET' if no connection is found.
+    This creates 'Electrical Domains' for safe clustering.
+    """
+
+    # 1. Initialize Default for ALL Flip-Flops
+    for name, data in design_data.items():
+        if data['type'] == 'flip_flop':
+            data['control_net'] = "NO_RESET"
+
+    # 2. Extract NETS section
+    nets_start = def_text.find("NETS")
+    nets_end = def_text.find("END NETS")
+    if nets_start == -1:
+        RuntimeError("NETS section not found in DEF file")
+        return design_data
+
+    nets_section = def_text[nets_start:nets_end]
+    
+    # 3. Parse NETS
+    # Regex to capture: "- net_name"
+    net_split_pattern = re.compile(r'-\s+(\S+)')
+    
+    # Split by ";" to handle each net definition separately
+    # This is much faster than line-by-line for massive files
+    blocks = nets_section.split(";")
+    
+    match_count = 0
+    
+    for block in blocks:
+        if not block.strip(): continue
+
+        # A. Identify the Net Name
+        header_match = net_split_pattern.search(block)
+        if not header_match: continue
+        current_net = header_match.group(1)
+        
+        # B. Find instances connected to RESET_B on this net
+        # We explicitly look for the string "RESET_B" in the pin position
+        # Pattern captures: ( instance_name RESET_B )
+        # \s+ handles spaces/newlines robustly
+        connections = re.findall(r'\(\s+(\S+)\s+RESET_B\s+\)', block)
+        
+        for inst in connections:
+            # Check if this instance is actually a Flop in our data
+            # (Avoids capturing other cells that might have a RESET_B pin)
+            if inst in design_data and design_data[inst]['type'] == 'flip_flop':
+                design_data[inst]['control_net'] = current_net
+                match_count += 1
+
+    return design_data
+
 #main wrapper
 def process_design(filename, clock_port="clk"):
     design_name = filename.split("_")[0]
@@ -213,6 +267,9 @@ def process_design(filename, clock_port="clk"):
 
     # 5. Gravitational Pull Calculation
     design_data = calculate_gravity_vectors(design_data)
+
+    #6 adding reset nets to flops
+    design_data = add_reset_net_to_flops(design_data, def_text)
     
     return design_data 
 
