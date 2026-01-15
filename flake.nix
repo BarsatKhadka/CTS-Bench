@@ -141,14 +141,30 @@
         # These devShells are rather unorthodox for Nix devShells in that they
         # include the package itself. For a proper devShell, try .#dev.
         
-        # --- MODIFIED: Added gcc, numpy, and torch ---
+        # --- Use the existing createOpenLaneShell but with a startup script ---
         default = callPackage (self.createOpenLaneShell {
             extra-packages = with pkgs; [
               gcc
+              cmake
+              ninja
+              gnumake
+              patchelf
             ];
             extra-python-packages = with pkgs.python3.pkgs; [
               numpy
               torch
+              scipy
+              pandas
+              matplotlib
+              seaborn
+              scikit-learn
+              jupyter
+              ipython
+              ipywidgets
+              pip
+              setuptools
+              wheel
+              virtualenv
             ];
         }) {};
         # ---------------------------------------------------------
@@ -212,6 +228,101 @@
           ];
           include-openlane = false;
         }) {};
+        
+        # --- ADD A NEW SHELL SPECIFICALLY FOR PYTORCH GEOMETRIC ---
+        pytorch-geometric = pkgs.devshell.mkShell {
+          name = "openlane-pytorch-geometric";
+          
+          packages = with pkgs; [
+            # Core OpenLane
+            python3.pkgs.openlane
+            # Build tools
+            gcc
+            cmake
+            ninja
+            gnumake
+            patchelf
+            # Python and ML
+            python3
+            python3Packages.numpy
+            python3Packages.torch
+            python3Packages.scipy
+            python3Packages.pandas
+            python3Packages.matplotlib
+            python3Packages.seaborn
+            python3Packages.scikit-learn
+            python3Packages.jupyter
+            python3Packages.ipython
+            python3Packages.ipywidgets
+            python3Packages.pip
+            python3Packages.setuptools
+            python3Packages.wheel
+            python3Packages.virtualenv
+            # EDA tools
+            verilog
+            gtkwave
+            # Utilities
+            git
+            curl
+            wget
+            vim
+            bat
+            ripgrep
+            fd
+          ];
+          
+          env = [
+            {
+              name = "PYTHONPATH";
+              value = "$PYTHONPATH:${pkgs.python3.pkgs.openlane}/${pkgs.python3.sitePackages}";
+            }
+          ];
+          
+          commands = [
+            {
+              name = "openlane";
+              help = "OpenLane CLI";
+              command = "python -m openlane $@";
+            }
+            {
+              name = "setup-pytorch-geometric";
+              help = "Setup PyTorch Geometric in a virtual environment";
+              command = ''
+                if [ ! -d "$PWD/.venv" ]; then
+                  echo "Creating virtual environment..."
+                  python -m venv .venv
+                fi
+                echo "Activating virtual environment..."
+                source .venv/bin/activate
+                echo "Installing PyTorch Geometric..."
+                pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric
+                echo "Done! Virtual environment is at $PWD/.venv"
+                echo "To activate: source .venv/bin/activate"
+              '';
+            }
+          ];
+          
+          # Devshell uses startup instead of shellHook
+          startup = {
+            welcome.text = ''
+              === OpenLane with PyTorch Geometric Development Shell ===
+              
+              Available commands:
+                • setup-pytorch-geometric - Install PyTorch Geometric in a virtual environment
+                • openlane - Run OpenLane CLI
+                
+              To install PyTorch Geometric:
+                1. Run: setup-pytorch-geometric
+                2. Activate: source .venv/bin/activate
+                3. Test: python -c "import torch_geometric; print('Success!')"
+                
+              Or manually:
+                1. python -m venv .venv
+                2. source .venv/bin/activate  
+                3. pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric
+            '';
+          };
+        };
       }
     );
   };

@@ -122,6 +122,55 @@ def extract_saif_data(saif_text, design_data):
             design_data[gate_name]["toggle_count"] = np.log1p(max_tc)
     return design_data
 
+def calculate_gravity_vectors(design_data):
+    """
+    Calculates the 'Gravitational Pull' for each Flip-Flop.
+    
+    Physics:
+    1. Finds all immediate neighbors (Fan-In + Fan-Out).
+    2. Calculates the Average Coordinate (Centroid) of those neighbors.
+    3. Calculates the Vector (dx, dy) from the FF to that Centroid.
+    """
+    gravity_data = {}
+    
+    for name, data in design_data.items():
+        # Only process Flip-Flops
+        if data.get('type') != 'flip_flop':
+            continue
+
+        # 1. Gather all connected logic (Inputs AND Outputs)
+        neighbors = data.get('fan_in', []) + data.get('fan_out', [])
+        
+        neighbor_coords = []
+        for n_name in neighbors:
+            # We must verify the neighbor exists in our dict
+            if n_name in design_data:
+                neighbor_coords.append(design_data[n_name]['coords'])
+        
+        # 2. Calculate Average (The Center of Gravity)
+        if not neighbor_coords:
+            # If floating/disconnected, no gravity
+            gravity_data[name] = {'vector': (0.0, 0.0), 'magnitude': 0.0}
+            continue
+
+        # Convert to numpy for easy mean calculation
+        coords_array = np.array(neighbor_coords)
+        avg_x = np.mean(coords_array[:, 0])
+        avg_y = np.mean(coords_array[:, 1])
+        
+        # 3. Calculate Vector (Where is it being pulled?)
+        current_x, current_y = data['coords']
+        
+        dx = avg_x - current_x
+        dy = avg_y - current_y
+        
+        # Store it directly in the dictionary if you want, or a new dict
+        design_data[name]['gravity_vector'] = (dx, dy)
+        design_data[name]['gravity_center'] = (avg_x, avg_y)
+
+
+    return design_data
+
 #main wrapper
 def process_design(filename, clock_port="clk"):
     design_name = filename.split("_")[0]
@@ -161,6 +210,9 @@ def process_design(filename, clock_port="clk"):
                  
     # 4. Toggles
     design_data = extract_saif_data(saif_text, design_data)
+
+    # 5. Gravitational Pull Calculation
+    design_data = calculate_gravity_vectors(design_data)
     
     return design_data 
 

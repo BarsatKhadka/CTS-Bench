@@ -4,6 +4,9 @@ import random , torch
 FILENAME = "picorv32_run_20260107_145745" 
 
 design_data  = process_design(FILENAME, clock_port="clk")
+sample = random.sample(list(design_data.keys()), 10)
+for key in sample:
+    print(key, design_data[key])
 print(len(design_data))
 
 
@@ -49,9 +52,54 @@ def build_gnn_tensors(design_data):
 
 x, edge_index, edge_attr = build_gnn_tensors(design_data)
 
-print(f"Node Feature Matrix Shape: {x.shape}")     
-print(f"Edge Index Shape: {edge_index.shape}")      
-print(f"Edge Attribute Shape: {edge_attr.shape}")   
+from torch_geometric.data import Data
+
+# Bundling the tensors into a PyG Graph Object
+graph = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+
+def get_graph():
+    return graph
+
+
+# Output will look like: Data(x=[num_nodes, 4], edge_index=[2, num_edges], edge_attr=[num_edges, 1])
+
+# import networkx as nx       
+# import matplotlib.pyplot as plt
+# from torch_geometric.utils import to_networkx
+
+# def visualize_chip_graph(graph):
+#     # 1. Convert PyG graph to NetworkX for easier plotting
+#     G = to_networkx(graph, to_undirected=False)
+    
+#     # 2. Extract positions from node features (x, y are indices 0 and 1)
+#     pos = {i: (graph.x[i, 0].item(), graph.x[i, 1].item()) for i in range(graph.num_nodes)}
+    
+#     # 3. Identify Flip-Flops for distinct coloring
+#     # Convert tensor to list of booleans for standard Python loop
+#     is_ff_list = graph.x[:, 2].bool().tolist()
+    
+#     # FIXED LOGIC:
+#     node_colors = ['red' if ff else 'skyblue' for ff in is_ff_list]
+#     node_sizes = [20 if ff else 5 for ff in is_ff_list]
+
+#     plt.figure(figsize=(12, 10))
+    
+#     # 4. Draw Edges (low alpha to see the nodes better)
+#     nx.draw_networkx_edges(G, pos, alpha=0.1, edge_color='gray', arrows=False)
+    
+#     # 5. Draw Nodes
+#     nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, alpha=0.7)
+
+#     plt.title(f"Spatial Graph Visualization\n(Red = Flip-Flops, Blue = Combinational)")
+#     plt.xlabel("X Coordinate")
+#     plt.ylabel("Y Coordinate")
+#     plt.show()
+# # Run the visualization
+# visualize_chip_graph(graph)
+
+# print(f"Node Feature Matrix Shape: {x.shape}")     
+# print(f"Edge Index Shape: {edge_index.shape}")      
+# print(f"Edge Attribute Shape: {edge_attr.shape}")   
 
 
             
