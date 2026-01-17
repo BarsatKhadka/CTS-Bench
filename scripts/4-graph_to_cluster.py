@@ -67,10 +67,14 @@ def form_atomic_clusters(design_data):
 
         #build cluster features from cluster members
         valid_coords = []
+        member_tcs = []
         for m in cluster_members:
             m_data = design_data[m]
             if 'coords' in m_data:
                 valid_coords.append(m_data['coords'])
+            
+            tc = design_data[m]['toggle_count']
+            member_tcs.append(tc)
 
         if valid_coords:
             arr = np.array(valid_coords)
@@ -78,6 +82,12 @@ def form_atomic_clusters(design_data):
             spread = np.std(arr, axis=0)
         else:
             RuntimeError(f"No valid coordinates found for cluster rooted at {ff_name}")
+        
+        # Toggle Vector m = {max, sum, nonzero}
+        arr_tc = np.array(member_tcs)
+        tc_max = np.max(arr_tc) if len(arr_tc) > 0 else 0.0
+        tc_sum = np.sum(arr_tc)
+        tc_nz  = np.count_nonzero(arr_tc)
         
         gravity_center = design_data[ff_name].get('gravity_center', np.array([0.0, 0.0]))
         gravity_vector = design_data[ff_name].get('gravity_vector', np.array([0.0, 0.0]))
@@ -91,7 +101,8 @@ def form_atomic_clusters(design_data):
             'gravity_center': gravity_center,
             'gravity_vector': gravity_vector, 
             'size': len(cluster_members),
-            'control_net': control_net
+            'control_net': control_net, 
+            'toggle_feats': [tc_max, tc_sum, tc_nz]
         })
 
 
@@ -194,6 +205,10 @@ def create_macro_cluster(group):
         
     all_members = []
     all_centroids = []
+
+    batch_sums = []
+    batch_maxs = []
+    batch_nzs = []
     
     # We pick the ID of the first one as the new ID (or generate new one)
     leader_id = group[0]['id']
@@ -202,6 +217,11 @@ def create_macro_cluster(group):
     for c in group:
         all_members.extend(c['members'])
         all_centroids.append(c['centroid'])
+
+        t_feats = c['toggle_feats']
+        batch_maxs.append(t_feats[0])
+        batch_sums.append(t_feats[1])
+        batch_nzs.append(t_feats[2])
         
     # Recalculate Centroid
     arr = np.array(all_centroids)
@@ -215,6 +235,11 @@ def create_macro_cluster(group):
         # If it's a singleton, preserve its original spread
         new_spread = group[0]['spread']
 
+    # Re-calc Toggle Vector m
+    new_tc_max = np.max(batch_maxs)
+    new_tc_sum = np.sum(batch_sums)
+    new_tc_nz  = np.sum(batch_nzs) 
+
     atomic_ids = [c['id'] for c in group]  
     
     return {
@@ -227,10 +252,12 @@ def create_macro_cluster(group):
         'control_net': reset_net,
         'num_of_ff': sum(1 for m in all_members if design_data[m]['type'] == 'flip_flop'),
         'num_of_logic': sum(1 for m in all_members if design_data[m]['type'] == 'logic'),
+        'toggle_feats': [new_tc_max, new_tc_sum, new_tc_nz],
         'type': 'cluster'
     }
 
 final_clusters = merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.05 , gravity_alignment_threshold=0.9)
+# print(final_clusters[:5])
 
 def build_macro_edges(final_clusters, raw_edges):
     atom_to_macro = {}
@@ -272,6 +299,7 @@ from torch_geometric.data import Data
 from torch_geometric.utils import to_undirected
 
 def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILENAME}.pt"):
+
     if len(unique_macro_edges) > 0:
         src_list, dst_list = zip(*unique_macro_edges)
         edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
@@ -290,8 +318,19 @@ def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILE
         size_log = np.log1p(c['size']) 
         n_ff = c['num_of_ff']
         n_logic = c['num_of_logic']
+
+        # Unpack Toggle Features
+        tc_max, tc_sum, tc_nz = c['toggle_feats']
         
-        node_feats.append([cx, cy, sx, sy, size_log, n_ff, n_logic])
+        # Log-scale the large numbers to help the GNN
+        tc_max_log = np.log1p(tc_max)
+        tc_sum_log = np.log1p(tc_sum)
+        tc_nz_log  = np.log1p(tc_nz)
+
+        # Feature Vector: Length 10
+        # [x, y, sx, sy, size, n_ff, n_logic, tc_max, tc_sum, tc_nz]
+        node_feats.append([cx, cy, sx, sy, size_log, n_ff, n_logic, tc_max_log, tc_sum_log, tc_nz_log])
+        
         
     x = torch.tensor(node_feats, dtype=torch.float)
 
@@ -301,7 +340,7 @@ def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILE
     
     print(f"  - Nodes: {data.num_nodes}")
     print(f"  - Final Tensor Edges: {data.num_edges} (Bidirectional)")
-    print(f"  - Features: {data.num_node_features} (x, y, sx, sy, size, n_ff, n_logic)")
+    print(f"  - Features: {data.num_node_features} ")
 
 
 make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt")
