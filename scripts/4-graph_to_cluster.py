@@ -110,7 +110,7 @@ def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity
         
         if is_high_spread:
             # High spread? It goes directly to final 
-            final_clusters.append(c)
+            final_clusters.append(create_macro_cluster([c]))
         else:
             # Low spread? Add to the bin for its Reset Net
             # This drastically reduces search space , later we will only merge within same reset net
@@ -124,7 +124,7 @@ def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity
     for net_name, cluster_list in merge_candidates.items():
         # Skip if only 1 cluster in this bin
         if len(cluster_list) < 2:
-            final_clusters.extend(cluster_list)
+            final_clusters.append(create_macro_cluster(cluster_list))
             continue
 
         used = [False] * len(cluster_list)
@@ -188,8 +188,6 @@ def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity
 
 def create_macro_cluster(group):
     """ Helper to combine a list of atomic clusters into one Macro Cluster """
-    if len(group) == 1:
-        return group[0] # No change
         
     all_members = []
     all_centroids = []
@@ -209,9 +207,12 @@ def create_macro_cluster(group):
     # Recalculate Spread (Radius)
     # Note: simple std dev of centroids is an approximation, but fast
     new_spread = np.std(arr, axis=0) 
+
+    atomic_ids = [c['id'] for c in group]  
     
     return {
         'id': leader_id,
+        'atomic_ids': atomic_ids,
         'members': all_members,
         'centroid': new_centroid,
         'spread': new_spread,
@@ -229,174 +230,71 @@ print(randfinal)
 
 # print(merge_candidates)
 
-
-
 # import matplotlib.pyplot as plt
 # import matplotlib.patches as patches
 # import numpy as np
 # import random
 
-# def visualize_atomic_clusters(atomic_clusters, design_data, num_samples=5):
+# def visualize_macro_centroids(macro_clusters, title_suffix=""):
 #     """
-#     Visualizes a random sample of atomic clusters to verify grouping.
-#     - STAR = Flip-Flop (The Cluster Root)
-#     - DOTS = Logic Gates (The Cluster Members)
-#     - LINE = Connection
+#     Plots a single dot for the centroid of each macro cluster.
+#     - Size determines 'mass' (number of gates).
+#     - Color determines 'function' (control/reset net).
 #     """
-#     # Pick random clusters to visualize
-#     if len(atomic_clusters) < num_samples:
-#         samples = atomic_clusters
-#     else:
-#         samples = random.sample(atomic_clusters, num_samples)
-
-#     print(f"--- Visualizing {len(samples)} Sample Atomic Clusters ---")
+#     num_clusters = len(macro_clusters)
+#     print(f"--- Visualizing Centroids for {num_clusters} Macro Clusters ---")
 
 #     fig, ax = plt.subplots(figsize=(10, 10))
+
+#     # 1. Draw Die Boundary background
+#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='#333333', facecolor='#f8f9fa'))
+
+#     # Prepare data for scatter plot
+#     xs = []
+#     ys = []
+#     sizes = []
+#     colors = []
     
-#     # Draw Die Boundary (0,0 to 1,1)
-#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='#f0f0f0'))
+#     # Helper to generate consistent colors for reset nets
+#     net_colors = {}
+#     def get_net_color(net_name):
+#         if net_name not in net_colors:
+#             # Generate random bright color
+#             net_colors[net_name] = "#" + ''.join([random.choice('3456789ABCDEF') for j in range(6)])
+#         return net_colors[net_name]
 
-#     # distinct colors for different clusters
-#     colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#34495e', '#e67e22']
-
-#     for i, cluster in enumerate(samples):
-#         color = colors[i % len(colors)]
-        
-#         # 1. Get Root Flip-Flop Coordinates
-#         root_name = cluster['flop_name']
-#         if root_name not in design_data or 'coords' not in design_data[root_name]:
-#             continue
-            
-#         root_pos = design_data[root_name]['coords']
-        
-#         # 2. Get Member Gates Coordinates
-#         gate_positions = []
-#         for member in cluster['members']:
-#             if member == root_name: continue # Skip root
-#             if member in design_data and 'coords' in design_data[member]:
-#                 gate_positions.append(design_data[member]['coords'])
-
-#         # --- PLOTTING ---
-        
-#         # A. Draw Lines from Root to Gates (Spider legs)
-#         for gx, gy in gate_positions:
-#             ax.plot([root_pos[0], gx], [root_pos[1], gy], c=color, alpha=0.5, linewidth=1)
-
-#         # B. Draw Logic Gates (Small Dots)
-#         if gate_positions:
-#             g_arr = np.array(gate_positions)
-#             ax.scatter(g_arr[:, 0], g_arr[:, 1], c=color, s=20, marker='o', label=f"Cluster {cluster['id']} Gates")
-
-#         # C. Draw Root Flip-Flop (Big Star)
-#         ax.scatter(root_pos[0], root_pos[1], c=color, s=150, marker='*', edgecolors='black', label=f"FF: {root_name}")
-        
-#         # D. Draw Centroid (X)
+#     for cluster in macro_clusters:
 #         cx, cy = cluster['centroid']
-#         ax.scatter(cx, cy, c='black', s=50, marker='x', alpha=0.7)
+#         xs.append(cx)
+#         ys.append(cy)
+        
+#         # Calculate dot size based on cluster size (using log to keep scale manageable)
+#         # Base size 30 + scaled multiplier
+#         s = 30 + (np.log1p(cluster['size']) * 25)
+#         sizes.append(s)
+        
+#         # Get color based on control net
+#         colors.append(get_net_color(cluster['control_net']))
 
-#     ax.set_xlim(-0.05, 1.05)
-#     ax.set_ylim(-0.05, 1.05)
-#     ax.set_title(f"Atomic Cluster Inspection ({len(samples)} Random Samples)")
+#     # 2. Plot the Dots (Centroids)
+#     scatter = ax.scatter(xs, ys, s=sizes, c=colors, alpha=0.8, edgecolors='black', linewidth=0.5, zorder=10)
+
+#     # Formatting
+#     ax.set_xlim(-0.02, 1.02)
+#     ax.set_ylim(-0.02, 1.02)
+    
+#     # Create a custom legend for the reset nets
+#     handles = [patches.Patch(color=color, label=net) for net, color in net_colors.items()]
+#     # Only show legend if there aren't too many nets
+#     if len(handles) <= 10:
+#         ax.legend(handles=handles, title="Control Nets", loc='upper right', fontsize='small')
+
+#     ax.set_title(f"GNN Node Representation ({num_clusters} Nodes)\n{title_suffix}")
 #     ax.set_xlabel("Normalized Die X")
 #     ax.set_ylabel("Normalized Die Y")
-#     ax.legend(loc='upper right', fontsize='small')
 #     plt.grid(True, linestyle='--', alpha=0.3)
 #     plt.show()
 
-# # --- RUN THIS BLOCK ---
-# # Pass the 'all_clusters' you generated in Phase 1
-
-# import matplotlib.patches as patches
-# import numpy as np
-# import random
-
-# def visualize_atomic_clusters(atomic_clusters, design_data, num_samples=5):
-#     """
-#     Visualizes a random sample of atomic clusters to verify grouping.
-#     - STAR = Flip-Flop (The Cluster Root)
-#     - DOTS = Logic Gates (The Cluster Members)
-#     - LINE = Connection
-#     """
-#     # Pick random clusters to visualize
-#     if len(atomic_clusters) < num_samples:
-#         samples = atomic_clusters
-#     else:
-#         samples = random.sample(atomic_clusters, num_samples)
-
-#     print(f"--- Visualizing {len(samples)} Sample Atomic Clusters ---")
-
-#     fig, ax = plt.subplots(figsize=(10, 10))
-    
-#     # Draw Die Boundary (0,0 to 1,1)
-#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='#f0f0f0'))
-
-#     # distinct colors for different clusters
-#     colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#34495e', '#e67e22']
-
-#     for i, cluster in enumerate(samples):
-#         color = colors[i % len(colors)]
-        
-#         # 1. Get Root Flip-Flop Coordinates
-#         root_name = cluster['flop_name']
-#         if root_name not in design_data or 'coords' not in design_data[root_name]:
-#             continue
-            
-#         root_pos = design_data[root_name]['coords']
-        
-#         # 2. Get Member Gates Coordinates
-#         gate_positions = []
-#         for member in cluster['members']:
-#             if member == root_name: continue # Skip root
-#             if member in design_data and 'coords' in design_data[member]:
-#                 gate_positions.append(design_data[member]['coords'])
-
-#         # --- PLOTTING ---
-        
-#         # A. Draw Lines from Root to Gates (Spider legs)
-#         for gx, gy in gate_positions:
-#             ax.plot([root_pos[0], gx], [root_pos[1], gy], c=color, alpha=0.5, linewidth=1)
-
-#         # B. Draw Logic Gates (Small Dots)
-#         if gate_positions:
-#             g_arr = np.array(gate_positions)
-#             ax.scatter(g_arr[:, 0], g_arr[:, 1], c=color, s=20, marker='o', label=f"Cluster {cluster['id']} Gates")
-
-#         # C. Draw Root Flip-Flop (Big Star)
-#         ax.scatter(root_pos[0], root_pos[1], c=color, s=150, marker='*', edgecolors='black', label=f"FF: {root_name}")
-        
-#         # D. Draw Centroid (X)
-#         cx, cy = cluster['centroid']
-#         ax.scatter(cx, cy, c='black', s=50, marker='x', alpha=0.7)
-
-#     ax.set_xlim(-0.05, 1.05)
-#     ax.set_ylim(-0.05, 1.05)
-#     ax.set_title(f"Atomic Cluster Inspection ({len(samples)} Random Samples)")
-#     ax.set_xlabel("Normalized Die X")
-#     ax.set_ylabel("Normalized Die Y")
-#     ax.legend(loc='upper right', fontsize='small')
-#     plt.grid(True, linestyle='--', alpha=0.3)
-#     plt.show()
-
-# # --- RUN THIS BLOCK ---
-# # Pass the 'all_clusters' you generated in Phase 1
-# visualize_atomic_clusters(all_clusters, design_data, num_samples=480)
-
-
-
-# def graph_to_cluster():
-#     node_to_idx = {name: i for i, name in enumerate(design_data.keys())}
-#     ff_names = [n for n, d in design_data.items() if d['type'] == 'flip_flop']
-
-#     ff_to_cluster_id = {name: i for i, name in enumerate(ff_names)}
-
-#     #go through each flip-flop and check their jaccard index with other using how similar their fan-out is
-
-
-#     return ff_names , len(ff_names)
-
-
-# ff_names, num_ff = graph_to_cluster()
-# print(f"Number of Flip-Flops: {num_ff}")
-# print("Sample Flip-Flop Names:", ff_names[:10])
-
-
+# # --- EXECUTE ---
+# # Run this using the 'final_clusters' list you generated in the previous step.
+# visualize_macro_centroids(final_clusters, title_suffix="Size=Mass, Color=ResetNet")
