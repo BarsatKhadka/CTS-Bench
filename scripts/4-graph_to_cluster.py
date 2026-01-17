@@ -1,8 +1,11 @@
 import random
+
+from sympy import group
 from extract_placement_def_to_dict import process_design
 from collections import defaultdict, deque
 import numpy as np
 import networkx as nx
+import torch
 
 FILENAME = "picorv32_run_20260107_145745"
 
@@ -96,7 +99,7 @@ def form_atomic_clusters(design_data):
     return atomic_clusters , len(atomic_clusters) , raw_edges
 
 
-all_clusters , num_clusters , raw_edges = form_atomic_clusters(design_data)
+atomic_clusters , num_clusters , raw_edges = form_atomic_clusters(design_data)
 
 
 def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity_alignment_threshold=0.86):
@@ -206,7 +209,11 @@ def create_macro_cluster(group):
     
     # Recalculate Spread (Radius)
     # Note: simple std dev of centroids is an approximation, but fast
-    new_spread = np.std(arr, axis=0) 
+    if len(group) > 1:
+        new_spread = np.std(arr, axis=0)
+    else:
+        # If it's a singleton, preserve its original spread
+        new_spread = group[0]['spread']
 
     atomic_ids = [c['id'] for c in group]  
     
@@ -223,78 +230,148 @@ def create_macro_cluster(group):
         'type': 'cluster'
     }
 
-final_clusters = merge_atomic_clusters(all_clusters , raw_edges , dist_limit=0.05 , gravity_alignment_threshold=0.9)
-print(f"Total Final Clusters after Merging: {len(final_clusters)}")
-randfinal = random.sample(final_clusters , 1)
-print(randfinal)
+final_clusters = merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.05 , gravity_alignment_threshold=0.9)
 
-# print(merge_candidates)
-
-# import matplotlib.pyplot as plt
-# import matplotlib.patches as patches
-# import numpy as np
-# import random
-
-# def visualize_macro_centroids(macro_clusters, title_suffix=""):
-#     """
-#     Plots a single dot for the centroid of each macro cluster.
-#     - Size determines 'mass' (number of gates).
-#     - Color determines 'function' (control/reset net).
-#     """
-#     num_clusters = len(macro_clusters)
-#     print(f"--- Visualizing Centroids for {num_clusters} Macro Clusters ---")
-
-#     fig, ax = plt.subplots(figsize=(10, 10))
-
-#     # 1. Draw Die Boundary background
-#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='#333333', facecolor='#f8f9fa'))
-
-#     # Prepare data for scatter plot
-#     xs = []
-#     ys = []
-#     sizes = []
-#     colors = []
+def build_macro_edges(final_clusters, raw_edges):
+    atom_to_macro = {}
     
-#     # Helper to generate consistent colors for reset nets
-#     net_colors = {}
-#     def get_net_color(net_name):
-#         if net_name not in net_colors:
-#             # Generate random bright color
-#             net_colors[net_name] = "#" + ''.join([random.choice('3456789ABCDEF') for j in range(6)])
-#         return net_colors[net_name]
-
-#     for cluster in macro_clusters:
-#         cx, cy = cluster['centroid']
-#         xs.append(cx)
-#         ys.append(cy)
+    # 1. Create a Lookup Map: Atomic ID -> Macro Index
+    for macro_idx, cluster in enumerate(final_clusters):
+        if 'atomic_ids' in cluster:
+            for atom_id in cluster['atomic_ids']:
+                atom_to_macro[atom_id] = macro_idx
+        else:
+            print("!!!!!'atomic_ids' missing in cluster. Cannot map edges.")
+            return None
         
-#         # Calculate dot size based on cluster size (using log to keep scale manageable)
-#         # Base size 30 + scaled multiplier
-#         s = 30 + (np.log1p(cluster['size']) * 25)
-#         sizes.append(s)
+    # Logic: If Atom A (in Macro 1) was connected to Atom B (in Macro 2),
+    # Then Macro 1 is connected to Macro 2.
+    unique_macro_edges = set()
+    
+    for u, v in raw_edges:
+        # Check if both atoms map to a valid macro
+        if u in atom_to_macro and v in atom_to_macro:
+            macro_u = atom_to_macro[u]
+            macro_v = atom_to_macro[v]
+            
+            # We only care about connections BETWEEN clusters.
+            # (Internal connections are absorbed into the node features)
+            if macro_u != macro_v:
+                # Add edge (undirected)
+                # Using a set handles duplicates automatically.
+                edge = tuple(sorted((macro_u, macro_v)))
+                unique_macro_edges.add(edge)
+    
+    print(f"  - Collapsed {len(raw_edges)} Atomic Edges -> {len(unique_macro_edges)} Macro Edges")
+
+    return unique_macro_edges
+
+unique_macro_edges = build_macro_edges(final_clusters , raw_edges)
+
+from torch_geometric.data import Data
+from torch_geometric.utils import to_undirected
+
+def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILENAME}.pt"):
+    if len(unique_macro_edges) > 0:
+        src_list, dst_list = zip(*unique_macro_edges)
+        edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
         
-#         # Get color based on control net
-#         colors.append(get_net_color(cluster['control_net']))
+        # MAGIC STEP: Automatically create the reverse edges (u->v AND v->u)
+        edge_index = to_undirected(edge_index)
+    else:
+        edge_index = torch.empty((2, 0), dtype=torch.long)
 
-#     # 2. Plot the Dots (Centroids)
-#     scatter = ax.scatter(xs, ys, s=sizes, c=colors, alpha=0.8, edgecolors='black', linewidth=0.5, zorder=10)
+    # 2. Build Node Features Matrix
+    # Features: [Centroid_X, Centroid_Y, Spread_X, Spread_Y, Log_Size, Num_FF, Num_Logic]
+    node_feats = []
+    for c in final_clusters:
+        cx, cy = c['centroid']
+        sx, sy = c['spread']
+        size_log = np.log1p(c['size']) 
+        n_ff = c['num_of_ff']
+        n_logic = c['num_of_logic']
+        
+        node_feats.append([cx, cy, sx, sy, size_log, n_ff, n_logic])
+        
+    x = torch.tensor(node_feats, dtype=torch.float)
 
-#     # Formatting
+    # 3. Create and Save Data Object
+    data = Data(x=x, edge_index=edge_index)
+    # torch.save(data, output_name)
+    
+    print(f"  - Nodes: {data.num_nodes}")
+    print(f"  - Final Tensor Edges: {data.num_edges} (Bidirectional)")
+    print(f"  - Features: {data.num_node_features} (x, y, sx, sy, size, n_ff, n_logic)")
+
+
+make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt")
+
+# import torch
+# import networkx as nx
+# import matplotlib.pyplot as plt
+# from torch_geometric.utils import to_networkx
+
+# def view_graph_pt(filename):
+#     print(f"--- Loading {filename} ---")
+#     # 1. Load Data (Safety flag added)
+#     data = torch.load(filename, weights_only=False)
+    
+#     # 2. Convert to NetworkX
+#     # We force undirected to simplify the visual
+#     G = to_networkx(data, to_undirected=True, remove_self_loops=True)
+    
+#     print(f"NetworkX Graph Stats:")
+#     print(f"  - Nodes: {G.number_of_nodes()}")
+#     print(f"  - Edges: {G.number_of_edges()}") 
+    
+#     if G.number_of_edges() == 0:
+#         print("⚠️ WARNING: The graph object has 0 edges. Check your build_and_save_tensor function!")
+#         return
+
+#     # 3. Extract Positions
+#     pos = {}
+#     node_sizes = []
+    
+#     # We color nodes by type (FF vs Logic) to make it look cooler
+#     node_colors = []
+    
+#     for i in range(data.num_nodes):
+#         x = data.x[i, 0].item()
+#         y = data.x[i, 1].item()
+#         pos[i] = (x, y)
+        
+#         # Size based on mass
+#         size_val = data.x[i, 4].item()
+#         node_sizes.append(20 + (size_val * 30))
+        
+#         # Color: if num_ff > 0 (index 5) -> Red, else Blue
+#         if data.x[i, 5].item() > 0:
+#             node_colors.append('#e74c3c') # Red for FF-heavy clusters
+#         else:
+#             node_colors.append('#3498db') # Blue for Logic clusters
+
+#     # 4. Draw High-Contrast Plot
+#     fig, ax = plt.subplots(figsize=(12, 12))
+    
+#     # --- CHANGE 1: Darker, Thicker Edges ---
+#     nx.draw_networkx_edges(G, pos, 
+#                            alpha=0.6,          # Increased from 0.1 to 0.6 (Much darker)
+#                            edge_color='#555555', # Dark Grey instead of light grey
+#                            width=1.0)          # Thicker lines
+    
+#     # Draw Nodes
+#     nx.draw_networkx_nodes(G, pos, 
+#                            node_size=node_sizes, 
+#                            node_color=node_colors, 
+#                            edgecolors='black', # Add black border to dots
+#                            linewidths=0.5,
+#                            alpha=0.9)
+
+#     ax.set_title(f"Graph Visualization: {filename}\n{G.number_of_edges()} Connections Visible")
 #     ax.set_xlim(-0.02, 1.02)
 #     ax.set_ylim(-0.02, 1.02)
-    
-#     # Create a custom legend for the reset nets
-#     handles = [patches.Patch(color=color, label=net) for net, color in net_colors.items()]
-#     # Only show legend if there aren't too many nets
-#     if len(handles) <= 10:
-#         ax.legend(handles=handles, title="Control Nets", loc='upper right', fontsize='small')
-
-#     ax.set_title(f"GNN Node Representation ({num_clusters} Nodes)\n{title_suffix}")
-#     ax.set_xlabel("Normalized Die X")
-#     ax.set_ylabel("Normalized Die Y")
-#     plt.grid(True, linestyle='--', alpha=0.3)
+#     plt.grid(True, linestyle=':', alpha=0.3)
 #     plt.show()
 
-# # --- EXECUTE ---
-# # Run this using the 'final_clusters' list you generated in the previous step.
-# visualize_macro_centroids(final_clusters, title_suffix="Size=Mass, Color=ResetNet")
+# # Run it
+# view_graph_pt("picorv32_run_20260107_145745.pt")
