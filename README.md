@@ -92,3 +92,30 @@ then average gravity vector
 if that passess all then merge those two for a new cluster 
 
 
+
+If a gate is on two clusters , then we will just assign it to one cluster , then we will signify a relationship with edge to other cluster to show it also has connections with the other one 
+
+
+Encounter cases
+
+Flip-flop encountered
+
+You do not merge clusters.
+
+You record an edge between the two FF clusters (raw_edges).
+
+This captures FF-to-FF proximity / logical affinity.
+
+Logic gate encountered
+
+If unclaimed → assign it to this FF’s cluster.
+
+If already claimed by another FF → don’t steal it; instead add an edge between the two FFs.
+
+This is a winner-takes-first ownership model.
+
+
+If FF_0 and FF_100 both drive Gate_A, your loop guarantees FF_0 always captures the gate, and FF_100 always gets the edge.
+: If your FFs are sorted by name (e.g., _0001_ to _9999_), you might create a "Left-to-Right" bias where the top-left of the chip (low IDs) tends to be "heavier" (owning more gates) than the bottom-right.
+
+this is fixed by shuffling the flops 
