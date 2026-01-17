@@ -217,13 +217,15 @@ def create_macro_cluster(group):
         'spread': new_spread,
         'size': len(all_members),
         'control_net': reset_net,
-        'num_of_ff': sum(1 for m in all_members if 'ff' in m.lower()),
-        'num_of_logic': sum(1 for m in all_members if 'ff' not in m.lower()),
+        'num_of_ff': sum(1 for m in all_members if design_data[m]['type'] == 'flip_flop'),
+        'num_of_logic': sum(1 for m in all_members if design_data[m]['type'] == 'logic'),
         'type': 'cluster'
     }
 
-final_clusters = merge_atomic_clusters(all_clusters , raw_edges , dist_limit=0.1 , gravity_alignment_threshold=0.86)
+final_clusters = merge_atomic_clusters(all_clusters , raw_edges , dist_limit=0.05 , gravity_alignment_threshold=0.9)
 print(f"Total Final Clusters after Merging: {len(final_clusters)}")
+randfinal = random.sample(final_clusters , 1)
+print(randfinal)
 
 # print(merge_candidates)
 
@@ -232,126 +234,152 @@ print(f"Total Final Clusters after Merging: {len(final_clusters)}")
 # import matplotlib.pyplot as plt
 # import matplotlib.patches as patches
 # import numpy as np
+# import random
 
-# def visualize_cluster_graph(atomic_clusters, edge_list, design_data):
-#     fig, ax = plt.subplots(figsize=(12, 12))
-#     print(f"--- Visualizing Force Graph ({len(edge_list)} Edges) ---")
+# def visualize_atomic_clusters(atomic_clusters, design_data, num_samples=5):
+#     """
+#     Visualizes a random sample of atomic clusters to verify grouping.
+#     - STAR = Flip-Flop (The Cluster Root)
+#     - DOTS = Logic Gates (The Cluster Members)
+#     - LINE = Connection
+#     """
+#     # Pick random clusters to visualize
+#     if len(atomic_clusters) < num_samples:
+#         samples = atomic_clusters
+#     else:
+#         samples = random.sample(atomic_clusters, num_samples)
+
+#     print(f"--- Visualizing {len(samples)} Sample Atomic Clusters ---")
+
+#     fig, ax = plt.subplots(figsize=(10, 10))
     
-#     # 1. Plot the Edges (The Forces)
-#     # We plot these first so they are in the background
-#     for (src_id, dst_id) in edge_list:
-#         # Get coordinates of the two cluster centroids
-#         c1 = atomic_clusters[src_id]['centroid']
-#         c2 = atomic_clusters[dst_id]['centroid']
+#     # Draw Die Boundary (0,0 to 1,1)
+#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='#f0f0f0'))
+
+#     # distinct colors for different clusters
+#     colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#34495e', '#e67e22']
+
+#     for i, cluster in enumerate(samples):
+#         color = colors[i % len(colors)]
         
-#         # Draw a yellow line between them
-#         ax.plot([c1[0], c2[0]], [c1[1], c2[1]], c='#f1c40f', linewidth=0.5, alpha=0.4, zorder=1)
+#         # 1. Get Root Flip-Flop Coordinates
+#         root_name = cluster['flop_name']
+#         if root_name not in design_data or 'coords' not in design_data[root_name]:
+#             continue
+            
+#         root_pos = design_data[root_name]['coords']
+        
+#         # 2. Get Member Gates Coordinates
+#         gate_positions = []
+#         for member in cluster['members']:
+#             if member == root_name: continue # Skip root
+#             if member in design_data and 'coords' in design_data[member]:
+#                 gate_positions.append(design_data[member]['coords'])
 
-#     # 2. Plot the Nodes (The Clusters)
-#     centroids = np.array([c['centroid'] for c in atomic_clusters])
-#     ax.scatter(centroids[:, 0], centroids[:, 1], c='#2c3e50', s=10, zorder=2, alpha=0.8)
-    
-#     # Die Boundary
-#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none'))
-    
-#     ax.set_title(f"Cluster Interaction Graph\nNodes: {len(atomic_clusters)} | Edges: {len(edge_list)}")
+#         # --- PLOTTING ---
+        
+#         # A. Draw Lines from Root to Gates (Spider legs)
+#         for gx, gy in gate_positions:
+#             ax.plot([root_pos[0], gx], [root_pos[1], gy], c=color, alpha=0.5, linewidth=1)
+
+#         # B. Draw Logic Gates (Small Dots)
+#         if gate_positions:
+#             g_arr = np.array(gate_positions)
+#             ax.scatter(g_arr[:, 0], g_arr[:, 1], c=color, s=20, marker='o', label=f"Cluster {cluster['id']} Gates")
+
+#         # C. Draw Root Flip-Flop (Big Star)
+#         ax.scatter(root_pos[0], root_pos[1], c=color, s=150, marker='*', edgecolors='black', label=f"FF: {root_name}")
+        
+#         # D. Draw Centroid (X)
+#         cx, cy = cluster['centroid']
+#         ax.scatter(cx, cy, c='black', s=50, marker='x', alpha=0.7)
+
+#     ax.set_xlim(-0.05, 1.05)
+#     ax.set_ylim(-0.05, 1.05)
+#     ax.set_title(f"Atomic Cluster Inspection ({len(samples)} Random Samples)")
+#     ax.set_xlabel("Normalized Die X")
+#     ax.set_ylabel("Normalized Die Y")
+#     ax.legend(loc='upper right', fontsize='small')
+#     plt.grid(True, linestyle='--', alpha=0.3)
 #     plt.show()
 
-# # --- EXECUTE ---
-# visualize_cluster_graph(all_clusters, raw_edges, design_data)
+# # --- RUN THIS BLOCK ---
+# # Pass the 'all_clusters' you generated in Phase 1
 
-
-# Note: 'edge_list' is the second return value from your function
-
-
-# import matplotlib.pyplot as plt
 # import matplotlib.patches as patches
 # import numpy as np
 # import random
 
-# def visualize_random_high_spread(atomic_clusters, design_data, spread_threshold=0.05, num_to_show=3):
+# def visualize_atomic_clusters(atomic_clusters, design_data, num_samples=5):
 #     """
-#     Plots a random selection of 'num_to_show' clusters that violate the spread threshold.
-#     Uses dotted lines for clarity.
+#     Visualizes a random sample of atomic clusters to verify grouping.
+#     - STAR = Flip-Flop (The Cluster Root)
+#     - DOTS = Logic Gates (The Cluster Members)
+#     - LINE = Connection
 #     """
-#     # 1. Filter to find all 'bad' clusters first
-#     bad_clusters = []
-#     for cluster in atomic_clusters:
-#         max_spread = np.max(cluster['spread'])
-#         if max_spread > spread_threshold:
-#             bad_clusters.append(cluster)
-            
-#     total_bad = len(bad_clusters)
-#     if total_bad == 0:
-#         print(f"No clusters found with spread > {spread_threshold}")
-#         return
+#     # Pick random clusters to visualize
+#     if len(atomic_clusters) < num_samples:
+#         samples = atomic_clusters
+#     else:
+#         samples = random.sample(atomic_clusters, num_samples)
 
-#     # 2. Randomly select a few to show
-#     num_to_pick = min(total_bad, num_to_show)
-#     selected_clusters = random.sample(bad_clusters, num_to_pick)
-    
-#     print(f"--- Visualizing {num_to_pick} Random High-Spread Clusters (out of {total_bad} total) ---")
+#     print(f"--- Visualizing {len(samples)} Sample Atomic Clusters ---")
 
-#     fig, ax = plt.subplots(figsize=(12, 12))
+#     fig, ax = plt.subplots(figsize=(10, 10))
     
-#     # Draw Die Boundary
-#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='#555555', facecolor='#f8f8f8'))
-    
-#     # Assign unique colors for the selected few for clarity
-#     colors = ['#d62728', '#1f77b4', '#2ca02c', '#9467bd', '#ff7f0e'] # Red, Blue, Green, Purple, Orange
+#     # Draw Die Boundary (0,0 to 1,1)
+#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='#f0f0f0'))
 
-#     for i, cluster in enumerate(selected_clusters):
-#         root_name = cluster['flop_name']
-#         if design_data[root_name]['coords'] is None: continue
-        
-#         max_spread = np.max(cluster['spread'])
+#     # distinct colors for different clusters
+#     colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#34495e', '#e67e22']
+
+#     for i, cluster in enumerate(samples):
 #         color = colors[i % len(colors)]
         
-#         root_x, root_y = design_data[root_name]['coords']
+#         # 1. Get Root Flip-Flop Coordinates
+#         root_name = cluster['flop_name']
+#         if root_name not in design_data or 'coords' not in design_data[root_name]:
+#             continue
+            
+#         root_pos = design_data[root_name]['coords']
         
-#         # --- PLOTTING ---
-#         # 1. Draw Dotted Connections
-#         gate_xs, gate_ys = [], []
+#         # 2. Get Member Gates Coordinates
+#         gate_positions = []
 #         for member in cluster['members']:
-#             if member == root_name: continue
-            
-#             if design_data[member].get('coords'):
-#                 gx, gy = design_data[member]['coords']
-#                 gate_xs.append(gx)
-#                 gate_ys.append(gy)
-#                 # linestyle=':' makes it dotted
-#                 ax.plot([root_x, gx], [root_y, gy], c=color, linewidth=1.5, linestyle=':', alpha=0.6, zorder=10)
+#             if member == root_name: continue # Skip root
+#             if member in design_data and 'coords' in design_data[member]:
+#                 gate_positions.append(design_data[member]['coords'])
 
-#         # 2. Plot Logic Gates
-#         if gate_xs:
-#             ax.scatter(gate_xs, gate_ys, c=color, s=25, alpha=0.8, zorder=11)
-            
-#         # 3. Plot Root FF (Larger Star)
-#         ax.scatter(root_x, root_y, c='black', s=120, marker='*', edgecolors=color, linewidth=1.5, zorder=12)
+#         # --- PLOTTING ---
         
-#         # 4. Label it
-#         label_text = f"{root_name}\nSpread: {max_spread:.2f}\nGates: {len(gate_xs)}"
-#         ax.text(root_x + 0.01, root_y + 0.01, label_text, fontsize=10, 
-#                 bbox=dict(facecolor='white', alpha=0.8, edgecolor=color), zorder=20)
+#         # A. Draw Lines from Root to Gates (Spider legs)
+#         for gx, gy in gate_positions:
+#             ax.plot([root_pos[0], gx], [root_pos[1], gy], c=color, alpha=0.5, linewidth=1)
 
-#     ax.set_xlim(0, 1)
-#     ax.set_ylim(0, 1)
-#     ax.set_title(f"Random High-Spread Inspection ({num_to_pick} selected)")
-#     ax.set_xlabel("Die X")
-#     ax.set_ylabel("Die Y")
+#         # B. Draw Logic Gates (Small Dots)
+#         if gate_positions:
+#             g_arr = np.array(gate_positions)
+#             ax.scatter(g_arr[:, 0], g_arr[:, 1], c=color, s=20, marker='o', label=f"Cluster {cluster['id']} Gates")
+
+#         # C. Draw Root Flip-Flop (Big Star)
+#         ax.scatter(root_pos[0], root_pos[1], c=color, s=150, marker='*', edgecolors='black', label=f"FF: {root_name}")
+        
+#         # D. Draw Centroid (X)
+#         cx, cy = cluster['centroid']
+#         ax.scatter(cx, cy, c='black', s=50, marker='x', alpha=0.7)
+
+#     ax.set_xlim(-0.05, 1.05)
+#     ax.set_ylim(-0.05, 1.05)
+#     ax.set_title(f"Atomic Cluster Inspection ({len(samples)} Random Samples)")
+#     ax.set_xlabel("Normalized Die X")
+#     ax.set_ylabel("Normalized Die Y")
+#     ax.legend(loc='upper right', fontsize='small')
 #     plt.grid(True, linestyle='--', alpha=0.3)
 #     plt.show()
 
-# # --- EXECUTE ---
-# # Run this multiple times to see different examples
-# visualize_random_high_spread(all_clusters, design_data, spread_threshold=0.1, num_to_show=5)
-        # 3. Plot Root FF (
-# sample = list(design_data.items())[:-10]
-
-
-# for key, value in sample:
-#     print(key, value)
-
+# # --- RUN THIS BLOCK ---
+# # Pass the 'all_clusters' you generated in Phase 1
+# visualize_atomic_clusters(all_clusters, design_data, num_samples=480)
 
 
 
