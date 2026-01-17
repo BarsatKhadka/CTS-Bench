@@ -1,12 +1,12 @@
 import random
 from extract_placement_def_to_dict import process_design
-from collections import deque
+from collections import defaultdict, deque
 import numpy as np
+import networkx as nx
 
 FILENAME = "picorv32_run_20260107_145745"
 
 design_data  = process_design(FILENAME, clock_port="clk")
-
 
 
 #aggregate flops and their one hop neighbors
@@ -74,8 +74,7 @@ def form_atomic_clusters(design_data):
             centroid = np.mean(arr, axis=0)
             spread = np.std(arr, axis=0)
         else:
-            centroid = np.array([0.0, 0.0])
-            spread = np.array([0.0, 0.0])   
+            RuntimeError(f"No valid coordinates found for cluster rooted at {ff_name}")
         
         gravity_center = design_data[ff_name].get('gravity_center', np.array([0.0, 0.0]))
         gravity_vector = design_data[ff_name].get('gravity_vector', np.array([0.0, 0.0]))
@@ -98,40 +97,168 @@ def form_atomic_clusters(design_data):
 
 
 all_clusters , num_clusters , raw_edges = form_atomic_clusters(design_data)
-print(f"Number of Atomic Clusters: {num_clusters}")
-print("Sample Atomic Clusters:", all_clusters[:5])
-print(f"Number of inter-cluster edges: {len(raw_edges)}")
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import numpy as np
 
-def visualize_cluster_graph(atomic_clusters, edge_list, design_data):
-    fig, ax = plt.subplots(figsize=(12, 12))
-    print(f"--- Visualizing Force Graph ({len(edge_list)} Edges) ---")
+def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity_alignment_threshold=0.86):
+    final_clusters = []
+    merge_candidates = defaultdict(list)
     
-    # 1. Plot the Edges (The Forces)
-    # We plot these first so they are in the background
-    for (src_id, dst_id) in edge_list:
-        # Get coordinates of the two cluster centroids
-        c1 = atomic_clusters[src_id]['centroid']
-        c2 = atomic_clusters[dst_id]['centroid']
+    # 1. TRAVERSE & FILTER
+    for c in atomic_clusters:
+        # Check Spread 
+        is_high_spread = np.max(c['spread']) > 0.05
         
-        # Draw a yellow line between them
-        ax.plot([c1[0], c2[0]], [c1[1], c2[1]], c='#f1c40f', linewidth=0.5, alpha=0.4, zorder=1)
+        if is_high_spread:
+            # High spread? It goes directly to final 
+            final_clusters.append(c)
+        else:
+            # Low spread? Add to the bin for its Reset Net
+            # This drastically reduces search space , later we will only merge within same reset net
+            net = c['control_net']
+            merge_candidates[net].append(c)
 
-    # 2. Plot the Nodes (The Clusters)
-    centroids = np.array([c['centroid'] for c in atomic_clusters])
-    ax.scatter(centroids[:, 0], centroids[:, 1], c='#2c3e50', s=10, zorder=2, alpha=0.8)
-    
-    # Die Boundary
-    ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none'))
-    
-    ax.set_title(f"Cluster Interaction Graph\nNodes: {len(atomic_clusters)} | Edges: {len(edge_list)}")
-    plt.show()
+    print(f"Filtered {len(final_clusters)} High-Spread Clusters.")
+    print(f"Processing {len(merge_candidates)} Reset Groups...")
 
-# --- EXECUTE ---
-visualize_cluster_graph(all_clusters, raw_edges, design_data)
+    merged_count = 0
+    for net_name, cluster_list in merge_candidates.items():
+        # Skip if only 1 cluster in this bin
+        if len(cluster_list) < 2:
+            final_clusters.extend(cluster_list)
+            continue
+
+        used = [False] * len(cluster_list)
+        for i in range(len(cluster_list)):
+                if used[i]: continue
+                
+                # Start a new merged group with 'i'
+                current_group = [cluster_list[i]]
+                used[i] = True
+                
+                # Look for partners for 'i'
+                base_centroid = cluster_list[i]['centroid']
+                base_vector = cluster_list[i]['gravity_vector']
+                
+                # Normalize base vector for dot product (avoid div by zero)
+                norm_base = np.linalg.norm(base_vector)
+                if norm_base > 0:
+                    #unit vector
+                    base_vector_u = base_vector / norm_base
+                else:
+                    base_vector_u = np.zeros(2)
+
+                for j in range(i + 1, len(cluster_list)):
+                    if used[j]: continue
+
+                    target = cluster_list[j]
+                    # --- CHECK 1: MANHATTAN DISTANCE ---
+                    dist = np.sum(np.abs(base_centroid - target['centroid']))
+
+                    if dist > dist_limit:
+                        continue
+
+                    # --- CHECK 2: GRAVITY ALIGNMENT (Cosine Similarity) ---
+                    target_vector = target['gravity_vector']
+                    norm_target = np.linalg.norm(target_vector)
+                
+                    # If either has no gravity (0,0), we assume they are compatible (neutral)
+                    if norm_base > 0 and norm_target > 0:
+                        target_vector_u = target_vector / norm_target
+                    # Dot product of unit vectors = Cosine Similarity (-1 to 1)
+                        alignment = np.dot(base_vector_u, target_vector_u)
+                    
+                    # If alignment is low, they are pulling apart.
+                        if alignment < gravity_alignment_threshold:
+                            continue
+
+                # PASSED ALL CHECKS: MERGE
+                    current_group.append(target)
+                    used[j] = True
+                    merged_count += 1
+
+                # Create the final merged object from 'current_group'
+                # (Logic to combine centroids, members, etc.)
+                final_clusters.append(create_macro_cluster(current_group))
+
+    print(f"Physics Merge Complete. Total Merges: {merged_count}")
+    print(f"Final Macro Clusters: {len(final_clusters)}")
+    return final_clusters          
+
+
+
+def create_macro_cluster(group):
+    """ Helper to combine a list of atomic clusters into one Macro Cluster """
+    if len(group) == 1:
+        return group[0] # No change
+        
+    all_members = []
+    all_centroids = []
+    
+    # We pick the ID of the first one as the new ID (or generate new one)
+    leader_id = group[0]['id']
+    reset_net = group[0]['control_net']
+    
+    for c in group:
+        all_members.extend(c['members'])
+        all_centroids.append(c['centroid'])
+        
+    # Recalculate Centroid
+    arr = np.array(all_centroids)
+    new_centroid = np.mean(arr, axis=0)
+    
+    # Recalculate Spread (Radius)
+    # Note: simple std dev of centroids is an approximation, but fast
+    new_spread = np.std(arr, axis=0) 
+    
+    return {
+        'id': leader_id,
+        'members': all_members,
+        'centroid': new_centroid,
+        'spread': new_spread,
+        'size': len(all_members),
+        'control_net': reset_net,
+        'num_of_ff': sum(1 for m in all_members if 'ff' in m.lower()),
+        'num_of_logic': sum(1 for m in all_members if 'ff' not in m.lower()),
+        'type': 'cluster'
+    }
+
+final_clusters = merge_atomic_clusters(all_clusters , raw_edges , dist_limit=0.1 , gravity_alignment_threshold=0.86)
+print(f"Total Final Clusters after Merging: {len(final_clusters)}")
+
+# print(merge_candidates)
+
+
+
+# import matplotlib.pyplot as plt
+# import matplotlib.patches as patches
+# import numpy as np
+
+# def visualize_cluster_graph(atomic_clusters, edge_list, design_data):
+#     fig, ax = plt.subplots(figsize=(12, 12))
+#     print(f"--- Visualizing Force Graph ({len(edge_list)} Edges) ---")
+    
+#     # 1. Plot the Edges (The Forces)
+#     # We plot these first so they are in the background
+#     for (src_id, dst_id) in edge_list:
+#         # Get coordinates of the two cluster centroids
+#         c1 = atomic_clusters[src_id]['centroid']
+#         c2 = atomic_clusters[dst_id]['centroid']
+        
+#         # Draw a yellow line between them
+#         ax.plot([c1[0], c2[0]], [c1[1], c2[1]], c='#f1c40f', linewidth=0.5, alpha=0.4, zorder=1)
+
+#     # 2. Plot the Nodes (The Clusters)
+#     centroids = np.array([c['centroid'] for c in atomic_clusters])
+#     ax.scatter(centroids[:, 0], centroids[:, 1], c='#2c3e50', s=10, zorder=2, alpha=0.8)
+    
+#     # Die Boundary
+#     ax.add_patch(patches.Rectangle((0, 0), 1, 1, linewidth=2, edgecolor='black', facecolor='none'))
+    
+#     ax.set_title(f"Cluster Interaction Graph\nNodes: {len(atomic_clusters)} | Edges: {len(edge_list)}")
+#     plt.show()
+
+# # --- EXECUTE ---
+# visualize_cluster_graph(all_clusters, raw_edges, design_data)
 
 
 # Note: 'edge_list' is the second return value from your function

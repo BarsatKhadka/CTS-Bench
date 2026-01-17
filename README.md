@@ -119,3 +119,25 @@ If FF_0 and FF_100 both drive Gate_A, your loop guarantees FF_0 always captures 
 : If your FFs are sorted by name (e.g., _0001_ to _9999_), you might create a "Left-to-Right" bias where the top-left of the chip (low IDs) tends to be "heavier" (owning more gates) than the bottom-right.
 
 this is fixed by shuffling the flops 
+
+
+
+how about in this phase 2 , we traverse from atomic clusters array itself instead of making all this 
+
+
+so we go through each atomic cluster 
+
+
+if their spread is higher than 0.05 then it goes into final cluster 
+
+
+if spread < 0.05 , then we filter clusters by reset net 
+
+
+now the search space is smaller for clustering two flops 
+
+
+go through each on their reset search space and there are two checks to do 
+
+
+their respective flip flop's gravity vector and their centroid manhattan distance
