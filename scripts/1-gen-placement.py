@@ -6,6 +6,7 @@ from openlane.steps import Yosys, OpenROAD, Odb, Misc
 from datetime import datetime
 
 
+
 # The full pipeline from RTL to Placement
 class FullPlacementFlow(SequentialFlow):
     Steps = [
@@ -48,7 +49,7 @@ def run_single_experiment(design_name, clock_period, clock_port):
         
         "FP_CORE_UTIL": core_util,
         "FP_IO_MODE": io_mode,      
-        "PL_TARGET_DENSITY": pl_density,
+        "PL_TARGET_DENSITY": pl_density,    
         "PL_RANDOM_GLB_PLACEMENT": True,  
         "PL_TIME_DRIVEN": random.choice([True, False]),
         "PL_ROUTABILITY_DRIVEN": random.choice([True, False]),
