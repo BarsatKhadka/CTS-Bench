@@ -35,9 +35,13 @@ def run_single_experiment(design_name, clock_period, clock_port):
         verilog_files = [f"./designs/{design_name}/rtl/{design_name}.v"]
 
     #randomizing some parameters
-    pl_density = round(random.uniform(0.55, 0.85), 2)
     io_mode = random.choice([0, 1]) 
-    core_util = random.randint(45, 65)
+
+    core_util = random.randint(40, 70)
+    min_required_density = (core_util / 100.0) + 0.05
+    pl_density = round(min_required_density + random.uniform(0.0, 0.20), 2)
+    if pl_density > 0.99:
+        pl_density = 0.99
 
     config = {
         "DESIGN_NAME": design_name,
@@ -65,7 +69,11 @@ def run_single_experiment(design_name, clock_period, clock_port):
     tag = f"{design_name}_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     flow.start(tag=tag)
 
-run_single_experiment("picorv32", 10.0, "clk")
-# run_single_experiment("aes", 20.0, "clk")
+    with open("latest_run.txt", "w") as f:
+        f.write(tag)
+    print(f"📄 Saved run tag to latest_run.txt: {tag}")
+
+# run_single_experiment("picorv32", 10.0, "clk")
+run_single_experiment("aes", 20.0, "clk")
 # run_single_experiment("sha256", 24.0, "clk")
 # run_single_experiment("ethmac", 70.0, "wb_clk_i")

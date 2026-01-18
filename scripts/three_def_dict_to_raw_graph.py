@@ -1,7 +1,12 @@
+import sys
 from extract_placement_def_to_dict import process_design , extract_die_area
 import random , torch
 
-FILENAME = "picorv32_run_20260107_145745" 
+if len(sys.argv) < 2:
+    print("❌ Error: Run Tag argument missing.")
+    sys.exit(1)
+
+FILENAME = sys.argv[1]
 
 design_data  = process_design(FILENAME, clock_port="clk")
 sample = random.sample(list(design_data.keys()), 10)
@@ -53,9 +58,14 @@ def build_gnn_tensors(design_data):
 x, edge_index, edge_attr = build_gnn_tensors(design_data)
 
 from torch_geometric.data import Data
+import os
 
 # Bundling the tensors into a PyG Graph Object
 graph = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+save_path = f"{FILENAME}.pt"
+
+# 3. Save the graph object
+torch.save(graph, save_path)
 
 def get_graph():
     return graph

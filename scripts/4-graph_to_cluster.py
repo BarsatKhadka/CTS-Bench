@@ -1,4 +1,5 @@
 import random
+import sys
 
 from sympy import group
 from extract_placement_def_to_dict import process_design
@@ -7,7 +8,13 @@ import numpy as np
 import networkx as nx
 import torch
 
-FILENAME = "picorv32_run_20260107_145745"
+# Change this to the specific run folder you are processing
+if len(sys.argv) < 2:
+    print(" Error: You must provide the Run Tag as an argument!")
+    print("Usage: python 2-gen-saif.py <RUN_TAG>")
+    sys.exit(1)
+
+FILENAME = sys.argv[1]  # Takes the argument passed from Bash
 
 design_data  = process_design(FILENAME, clock_port="clk")
 

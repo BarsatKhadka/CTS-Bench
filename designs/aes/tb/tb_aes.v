@@ -165,6 +165,7 @@ module tb_aes();
       $display("cycle: 0x%016x", cycle_ctr);
       $display("State of DUT");
       $display("------------");
+      /*
       $display("ctrl_reg:   init   = 0x%01x, next   = 0x%01x", dut.init_reg, dut.next_reg);
       $display("config_reg: encdec = 0x%01x, length = 0x%01x ", dut.encdec_reg, dut.keylen_reg);
       $display("");
@@ -172,6 +173,7 @@ module tb_aes();
       $display("block: 0x%08x, 0x%08x, 0x%08x, 0x%08x",
                dut.block_reg[0], dut.block_reg[1], dut.block_reg[2], dut.block_reg[3]);
       $display("");
+      */
 
     end
   endtask // dump_dut_state
