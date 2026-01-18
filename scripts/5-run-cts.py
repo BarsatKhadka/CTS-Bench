@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import glob
@@ -52,39 +53,43 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
     BASE = FILENAME
     try:
         base_state = load_snapshot(BASE)
-
-        knobs = {
-                "CTS_SINK_CLUSTERING_MAX_DIAMETER": random.randint(40, 130),
-                "CTS_SINK_CLUSTERING_SIZE": random.randint(15, 50),
-                "CTS_SINK_CLUSTERING_EXPONENT": random.randint(1, 4),
-                "CTS_CLUSTER_UNBALANCING_RATIO": round(random.uniform(0.4, 0.6), 2),
-                "CTS_DISTANCE_BETWEEN_BUFFERS": random.randint(80, 200),
-                "CTS_CLK_MAX_WIRE_LENGTH": random.randint(150, 600),
-                "CTS_BALANCE_LEVELS": random.choices([False, True], weights=[95, 5], k=1)[0]
+        for i in range(10):
+            knobs = {
+                    "CTS_SINK_CLUSTERING_MAX_DIAMETER": random.randint(40, 130),
+                    "CTS_SINK_CLUSTERING_SIZE": random.randint(15, 50),
+                    "CTS_DISTANCE_BETWEEN_BUFFERS": random.randint(80, 250),
+                    "CTS_CLK_MAX_WIRE_LENGTH": random.randint(150, 600),
+                }
+            
+            print(f"  Knobs: {knobs}")
+            
+            config = {
+                "DESIGN_NAME": DESIGN,
+                "PDK": "sky130A",
+                "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+                "SDC_FILE": "./designs/base.sdc",
+                "FP_CORE_UTIL": 50,
+                "CLOCK_PERIOD": clock_period,
+                "CLOCK_PORT": clock_port,
+                "CTS_SINK_CLUSTERING_SIZE": knobs["CTS_SINK_CLUSTERING_SIZE"],
+                "CTS_SINK_CLUSTERING_MAX_DIAMETER": knobs["CTS_SINK_CLUSTERING_MAX_DIAMETER"],
+                "CTS_CLK_MAX_WIRE_LENGTH": knobs["CTS_CLK_MAX_WIRE_LENGTH"],
+                "CTS_DISTANCE_BETWEEN_BUFFERS": knobs["CTS_DISTANCE_BETWEEN_BUFFERS"],
             }
-        
-        print(f"  Knobs: {knobs}")
-        
-        config = {
-            "DESIGN_NAME": DESIGN,
-            "PDK": "sky130A",
-            "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
-            "SDC_FILE": "./designs/base.sdc",
-            "FP_CORE_UTIL": 50,
-            "CLOCK_PERIOD": clock_period,
-            "CLOCK_PORT": clock_port,
-            "CTS_SINK_CLUSTERING_SIZE": knobs["CTS_SINK_CLUSTERING_SIZE"],
-            "CTS_SINK_CLUSTERING_MAX_DIAMETER": knobs["CTS_SINK_CLUSTERING_MAX_DIAMETER"],
-            "CTS_CLK_MAX_WIRE_LENGTH": knobs["CTS_CLK_MAX_WIRE_LENGTH"],
-            "CTS_DISTANCE_BETWEEN_BUFFERS": knobs["CTS_DISTANCE_BETWEEN_BUFFERS"],
-        }
 
-        flow = CTSOnlyFlow(config=config, design_dir=".")
-        
-        flow.start(
-            tag= FILENAME +"_"+"CTS",
-            with_initial_state=base_state   #this is where we load the base snapshot
-        )
+            flow = CTSOnlyFlow(config=config, design_dir=".")
+
+            target_dir = os.path.abspath(os.path.join("runs", FILENAME, "CTS-experiments" , f"CTS-{i+1}"))
+            
+            flow.start(
+                with_initial_state=base_state ,  #this is where we load the base snapshot
+                _force_run_dir=target_dir
+            )
+
+            # F. Save Knobs 
+            knob_file = os.path.join(target_dir, "knobs.json")
+            with open(knob_file, "w") as f:
+                json.dump(knobs, f, indent=4)
         
     except Exception as e:
         print(f"\nCRITICAL FAIL: {e}")
