@@ -3,12 +3,22 @@ import os
 import random
 import glob
 from pathlib import Path as SysPath
+import sys
+import sys
 from openlane.common import Path 
 from openlane.flows import SequentialFlow
 from openlane.steps import OpenROAD
 from openlane.state import State, DesignFormat
 
-FILENAME = "picorv32_run_20260107_145745"
+
+if len(sys.argv) > 1:
+    FILENAME = sys.argv[1]
+elif os.path.exists("latest_run.txt"):
+    FILENAME = open("latest_run.txt").read().strip()
+else:
+    sys.exit("Error: No Run Tag provided and latest_run.txt not found.")
+
+
 MY_PDK_ROOT = "/home/rain/.volare/volare/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af"
 os.environ["PDK_ROOT"] = MY_PDK_ROOT
 
