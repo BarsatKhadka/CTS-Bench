@@ -33,6 +33,9 @@ else
     python3 scripts/three_def_dict_to_raw_graph.py "$RUN_TAG"
 fi
 
+python3 scripts/5-run-cts.py "$RUN_TAG"
+python3 scripts/6-parse-cts-reports.py "$RUN_TAG"
+
 echo "========================================"
 echo " Done! Graph saved: $RUN_TAG.pt"
 echo "========================================"

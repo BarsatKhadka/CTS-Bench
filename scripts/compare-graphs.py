@@ -78,4 +78,4 @@ def compare_mismatched_graphs(path_a, path_b):
         print("Distinct: Good variation.")
 
 # Usage
-compare_mismatched_graphs("./aes_run_20260118_160626.pt", "./aes_run_20260118_161602.pt")
+compare_mismatched_graphs("./aes_run_20260118_193324.pt", "./aes_run_20260118_161602.pt")

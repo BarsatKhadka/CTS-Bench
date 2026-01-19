@@ -93,7 +93,7 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
             
             flow.start(
                 with_initial_state=base_state ,  #this is where we load the base snapshot
-                _force_run_dir=target_dir
+                _force_run_dir=target_dir 
             )
 
             # F. Save Knobs 
@@ -106,4 +106,4 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
 
 
 if __name__ == "__main__":
-    run_cts_from_placement("picorv32", 16, "clk")
+    run_cts_from_placement("aes", 12, "clk")

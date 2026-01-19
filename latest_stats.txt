@@ -1,0 +1,1 @@
+Ratio=1.4 Util=53 Strat=DELAY 3 Density=0.64

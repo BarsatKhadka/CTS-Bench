@@ -1,6 +1,8 @@
 import glob
 import os
 import random
+
+from sympy import ff
 from openlane.flows import SequentialFlow
 from openlane.steps import Yosys, OpenROAD, Odb, Misc 
 from datetime import datetime
@@ -43,14 +45,24 @@ def run_single_experiment(design_name, clock_period, clock_port):
     if pl_density > 0.99:
         pl_density = 0.99
 
+    SAFE_RATIOS = [0.7, 1.0, 1.4, 2.0]
+    fp_ratio = random.choice(SAFE_RATIOS)
+
+    synth_strategies = [
+        "AREA 0", "AREA 1", "AREA 2",
+        "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"
+    ]
+    synth_strategy = random.choice(synth_strategies)
+
     config = {
         "DESIGN_NAME": design_name,
         "VERILOG_FILES": verilog_files,
         "CLOCK_PERIOD": clock_period,
         "CLOCK_PORT": clock_port,
         "FALLBACK_SDC_FILE": "./designs/base.sdc",
+        "SYNTH_STRATEGY": synth_strategy,
         
-        
+        "FP_ASPECT_RATIO": fp_ratio,
         "FP_CORE_UTIL": core_util,
         "FP_IO_MODE": io_mode,      
         "PL_TARGET_DENSITY": pl_density,    
@@ -70,10 +82,15 @@ def run_single_experiment(design_name, clock_period, clock_port):
     flow.start(tag=tag)
 
     with open("latest_run.txt", "w") as f:
-        f.write(tag)
+        f.write(tag + "\n")
+        
     print(f"📄 Saved run tag to latest_run.txt: {tag}")
+    print(f"{fp_ratio}")
+    
+    with open("latest_stats.txt", "w") as f:
+        f.write(f"Ratio={fp_ratio} Util={core_util} Strat={synth_strategy} Density={pl_density}\n")
 
 # run_single_experiment("picorv32", 10.0, "clk")
-run_single_experiment("aes", 20.0, "clk")
+run_single_experiment("aes", 12.0, "clk")
 # run_single_experiment("sha256", 24.0, "clk")
 # run_single_experiment("ethmac", 70.0, "wb_clk_i")
