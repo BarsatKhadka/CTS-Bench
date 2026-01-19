@@ -1,11 +1,11 @@
 run_id,placement_id,design_name,aspect_ratio,core_util,density,synth_strategy,cts_max_wire,cts_buf_dist,cts_cluster_size,cts_cluster_dia,skew_setup,skew_hold,power_total,setup_slack,wirelength,raw_graph_path,cluster_graph_path
-aes_run_20260118_1000_CTS-1,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,150,80,20,50,0.54,0.02,0.031,4.12,145000,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-2,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,500,200,45,120,1.12,0.15,0.029,3.85,142000,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-3,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,180,90,25,60,0.58,0.04,0.032,4.08,146500,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-4,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,600,250,50,150,1.35,0.22,0.028,3.50,140500,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-5,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,200,100,30,70,0.60,0.05,0.031,4.05,145200,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-6,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,160,85,22,55,0.55,0.03,0.031,4.10,145100,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-7,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,450,180,40,110,0.95,0.12,0.030,3.92,143000,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-8,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,140,75,18,45,0.52,0.01,0.032,4.15,145800,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-9,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,550,220,48,130,1.25,0.18,0.029,3.60,141200,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
-aes_run_20260118_1000_CTS-10,aes_run_20260118_1000,aes,2.0,50,0.55,DELAY 1,190,95,28,65,0.59,0.04,0.031,4.06,145300,dataset_root/raw_graphs/aes_run_20260118_1000_raw.pt,dataset_root/graphs/aes_run_20260118_1000.pt
+1,aes_run_20260118_01,aes,2.0,50,0.55,DELAY 1,150,80,20,50,0.54,0.02,0.031,4.12,145000,dataset_root/raw_graphs/aes_run_20260118_01_raw.pt,dataset_root/graphs/aes_run_20260118_01.pt
+2,aes_run_20260118_02,aes,0.7,42,0.48,AREA 0,500,200,45,120,1.12,0.15,0.025,3.85,132000,dataset_root/raw_graphs/aes_run_20260118_02_raw.pt,dataset_root/graphs/aes_run_20260118_02.pt
+3,aes_run_20260118_03,aes,1.0,65,0.70,DELAY 4,180,90,25,60,0.58,0.04,0.035,4.08,156500,dataset_root/raw_graphs/aes_run_20260118_03_raw.pt,dataset_root/graphs/aes_run_20260118_03.pt
+4,aes_run_20260118_04,aes,1.4,55,0.60,AREA 2,600,250,50,150,1.35,0.22,0.028,3.50,140500,dataset_root/raw_graphs/aes_run_20260118_04_raw.pt,dataset_root/graphs/aes_run_20260118_04.pt
+5,aes_run_20260118_05,aes,0.7,45,0.50,DELAY 2,200,100,30,70,0.60,0.05,0.031,4.05,145200,dataset_root/raw_graphs/aes_run_20260118_05_raw.pt,dataset_root/graphs/aes_run_20260118_05.pt
+6,aes_run_20260118_06,aes,2.0,40,0.45,AREA 1,160,85,22,55,0.55,0.03,0.026,4.10,131000,dataset_root/raw_graphs/aes_run_20260118_06_raw.pt,dataset_root/graphs/aes_run_20260118_06.pt
+7,aes_run_20260118_07,aes,1.0,70,0.85,DELAY 0,450,180,40,110,0.95,0.12,0.038,3.92,163000,dataset_root/raw_graphs/aes_run_20260118_07_raw.pt,dataset_root/graphs/aes_run_20260118_07.pt
+8,aes_run_20260118_08,aes,1.4,48,0.52,DELAY 3,140,75,18,45,0.52,0.01,0.032,4.15,145800,dataset_root/raw_graphs/aes_run_20260118_08_raw.pt,dataset_root/graphs/aes_run_20260118_08.pt
+9,aes_run_20260118_09,aes,0.7,60,0.68,AREA 0,550,220,48,130,1.25,0.18,0.027,3.60,135200,dataset_root/raw_graphs/aes_run_20260118_09_raw.pt,dataset_root/graphs/aes_run_20260118_09.pt
+10,aes_run_20260118_10,aes,2.0,52,0.58,DELAY 1,190,95,28,65,0.59,0.04,0.031,4.06,145300,dataset_root/raw_graphs/aes_run_20260118_10_raw.pt,dataset_root/graphs/aes_run_20260118_10.pt
