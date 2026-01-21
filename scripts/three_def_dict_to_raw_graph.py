@@ -62,13 +62,17 @@ import os
 
 # Bundling the tensors into a PyG Graph Object
 graph = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+
+save_dir = "dataset_root/graphs/raw_graphs"
+os.makedirs(save_dir, exist_ok=True)
 save_path = f"{FILENAME}.pt"
 
 # 3. Save the graph object
-torch.save(graph, save_path)
+save_path = os.path.join(save_dir, f"{FILENAME}_raw.pt")  
+torch.save(graph, save_path)  
 
 def get_graph():
-    return graph
+    return graph    
 
 
 # Output will look like: Data(x=[num_nodes, 4], edge_index=[2, num_edges], edge_attr=[num_edges, 1])

@@ -1,3 +1,4 @@
+import os
 import random
 import sys
 
@@ -344,10 +345,15 @@ def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILE
     # 3. Create and Save Data Object
     data = Data(x=x, edge_index=edge_index)
     # torch.save(data, output_name)
-    
+    save_dir = "dataset_root/graphs/clustered_graphs"
+    os.makedirs(save_dir, exist_ok=True)
+    output_path = os.path.join(save_dir, f"{FILENAME}_clustered.pt")
+    torch.save(data, output_path)
+        
     print(f"  - Nodes: {data.num_nodes}")
     print(f"  - Final Tensor Edges: {data.num_edges} (Bidirectional)")
     print(f"  - Features: {data.num_node_features} ")
+
 
 
 make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt")
