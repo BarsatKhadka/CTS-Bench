@@ -1,6 +1,7 @@
 import glob
 import os
 import random
+import json
 
 from sympy import ff
 from openlane.flows import SequentialFlow
@@ -53,6 +54,8 @@ def run_single_experiment(design_name, clock_period, clock_port):
         "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"
     ]
     synth_strategy = random.choice(synth_strategies)
+    time_driven_bool = random.choice([True, False])
+    routability_driven_bool = random.choice([True, False])
 
     config = {
         "DESIGN_NAME": design_name,
@@ -67,8 +70,8 @@ def run_single_experiment(design_name, clock_period, clock_port):
         "FP_IO_MODE": io_mode,      
         "PL_TARGET_DENSITY": pl_density,    
         "PL_RANDOM_GLB_PLACEMENT": True,  
-        "PL_TIME_DRIVEN": random.choice([True, False]),
-        "PL_ROUTABILITY_DRIVEN": random.choice([True, False]),
+        "PL_TIME_DRIVEN": time_driven_bool,
+        "PL_ROUTABILITY_DRIVEN": routability_driven_bool
     }
 
     flow = FullPlacementFlow(
@@ -87,10 +90,21 @@ def run_single_experiment(design_name, clock_period, clock_port):
     print(f"📄 Saved run tag to latest_run.txt: {tag}")
     print(f"{fp_ratio}")
     
-    with open("latest_stats.txt", "w") as f:
-        f.write(f"Ratio={fp_ratio} Util={core_util} Strat={synth_strategy} Density={pl_density}\n")
+    stats = {
+        "design_name": design_name,
+        "aspect_ratio": fp_ratio,
+        "core_util": core_util,
+        "density": pl_density,
+        "synth_strategy": synth_strategy,
+        "io_mode": io_mode,
+        "time_driven": int(time_driven_bool),        # Save as 1/0
+        "routability_driven": int(routability_driven_bool) # Save as 1/0
+    }
 
-# run_single_experiment("picorv32", 10.0, "clk")
-run_single_experiment("aes", 12.0, "clk")
+    with open("latest_stats.json", "w") as f:
+        json.dump(stats, f, indent=4)
+
+run_single_experiment("picorv32", 10.0, "clk")
+# run_single_experiment("aes", 12.0, "clk")
 # run_single_experiment("sha256", 24.0, "clk")
 # run_single_experiment("ethmac", 70.0, "wb_clk_i")

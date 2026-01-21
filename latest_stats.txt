@@ -1,1 +1,0 @@
-Ratio=1.0 Util=62 Strat=AREA 2 Density=0.84
