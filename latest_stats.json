@@ -1,10 +1,10 @@
 {
     "design_name": "picorv32",
     "aspect_ratio": 0.7,
-    "core_util": 56,
-    "density": 0.68,
-    "synth_strategy": "DELAY 0",
+    "core_util": 66,
+    "density": 0.78,
+    "synth_strategy": "AREA 2",
     "io_mode": 1,
-    "time_driven": 1,
-    "routability_driven": 0
+    "time_driven": 0,
+    "routability_driven": 1
 }

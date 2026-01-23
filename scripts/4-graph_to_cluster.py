@@ -306,54 +306,67 @@ unique_macro_edges = build_macro_edges(final_clusters , raw_edges)
 from torch_geometric.data import Data
 from torch_geometric.utils import to_undirected
 
-def make_final_graph(final_clusters , unique_macro_edges , output_name = f"{FILENAME}.pt"):
-
-    if len(unique_macro_edges) > 0:
-        src_list, dst_list = zip(*unique_macro_edges)
-        edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
-        
-        # MAGIC STEP: Automatically create the reverse edges (u->v AND v->u)
-        edge_index = to_undirected(edge_index)
-    else:
-        edge_index = torch.empty((2, 0), dtype=torch.long)
-
-    # 2. Build Node Features Matrix
-    # Features: [Centroid_X, Centroid_Y, Spread_X, Spread_Y, Log_Size, Num_FF, Num_Logic]
+def make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt"):
+    
+    # --- 1. Nodes (Features) ---
     node_feats = []
-    for c in final_clusters:
+    centroid_lookup = {} 
+
+    for idx, c in enumerate(final_clusters):
         cx, cy = c['centroid']
         sx, sy = c['spread']
+        
+        # Log-scale features
         size_log = np.log1p(c['size']) 
         n_ff = c['num_of_ff']
         n_logic = c['num_of_logic']
+        tc_feats = [np.log1p(val) for val in c['toggle_feats']]
 
-        # Unpack Toggle Features
-        tc_max, tc_sum, tc_nz = c['toggle_feats']
-        
-        # Log-scale the large numbers to help the GNN
-        tc_max_log = np.log1p(tc_max)
-        tc_sum_log = np.log1p(tc_sum)
-        tc_nz_log  = np.log1p(tc_nz)
-
-        # Feature Vector: Length 10
-        # [x, y, sx, sy, size, n_ff, n_logic, tc_max, tc_sum, tc_nz]
-        node_feats.append([cx, cy, sx, sy, size_log, n_ff, n_logic, tc_max_log, tc_sum_log, tc_nz_log])
-        
+        # Feature Vector
+        node_feats.append([cx, cy, sx, sy, size_log, n_ff, n_logic] + tc_feats)
+        centroid_lookup[idx] = np.array([cx, cy])
         
     x = torch.tensor(node_feats, dtype=torch.float)
 
-    # 3. Create and Save Data Object
-    data = Data(x=x, edge_index=edge_index)
-    # torch.save(data, output_name)
+    # --- 2. Edges (Manhattan Distance) ---
+    if len(unique_macro_edges) > 0:
+        src_list, dst_list = zip(*unique_macro_edges)
+        
+        # Calculate Manhattan Distance for the base edges
+        dists = []
+        for u, v in unique_macro_edges:
+            p1 = centroid_lookup[u]
+            p2 = centroid_lookup[v]
+            manhattan_dist = np.sum(np.abs(p1 - p2)) 
+            dists.append([manhattan_dist])
+
+        # Create Tensors
+        edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
+        edge_attr  = torch.tensor(dists, dtype=torch.float)
+
+        # MAGIC STEP: Make Undirected
+        # 1. Double the indices (u->v AND v->u)
+        edge_index = to_undirected(edge_index)
+        
+        # 2. Double the attributes (Distance A->B is same as B->A)
+        # We simply stack the distance list on top of itself
+        edge_attr = torch.cat([edge_attr, edge_attr], dim=0)
+        
+    else:
+        edge_index = torch.empty((2, 0), dtype=torch.long)
+        edge_attr  = torch.empty((0, 1), dtype=torch.float)
+
+    # --- 3. Save ---
+    data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+
     save_dir = "dataset_root/graphs/clustered_graphs"
     os.makedirs(save_dir, exist_ok=True)
     output_path = os.path.join(save_dir, f"{FILENAME}_clustered.pt")
     torch.save(data, output_path)
         
-    print(f"  - Nodes: {data.num_nodes}")
-    print(f"  - Final Tensor Edges: {data.num_edges} (Bidirectional)")
-    print(f"  - Features: {data.num_node_features} ")
-
+    print(f"✅ Saved Graph: {output_path}")
+    print(f"   - Nodes: {data.num_nodes}")
+    print(f"   - Edges: {data.num_edges}")
 
 
 make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt")

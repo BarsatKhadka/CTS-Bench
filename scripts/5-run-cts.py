@@ -65,10 +65,15 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
         base_state = load_snapshot(BASE)
         for i in range(10):
             knobs = {
-                    "CTS_SINK_CLUSTERING_MAX_DIAMETER": random.randint(40, 130),
-                    "CTS_SINK_CLUSTERING_SIZE": random.randint(15, 50),
-                    "CTS_DISTANCE_BETWEEN_BUFFERS": random.randint(80, 250),
-                    "CTS_CLK_MAX_WIRE_LENGTH": random.randint(150, 600),
+                   "CTS_SINK_CLUSTERING_MAX_DIAMETER": random.randint(35, 70),
+
+                    "CTS_SINK_CLUSTERING_SIZE": random.randint(12, 30),
+
+                
+                    "CTS_DISTANCE_BETWEEN_BUFFERS": random.randint(70, 150),
+
+                    
+                    "CTS_CLK_MAX_WIRE_LENGTH": random.randint(130, 280),
                 }
             
             print(f"  Knobs: {knobs}")
@@ -78,7 +83,6 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
                 "PDK": "sky130A",
                 "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
                 "SDC_FILE": "./designs/base.sdc",
-                "FP_CORE_UTIL": 50,
                 "CLOCK_PERIOD": clock_period,
                 "CLOCK_PORT": clock_port,
                 "CTS_SINK_CLUSTERING_SIZE": knobs["CTS_SINK_CLUSTERING_SIZE"],
@@ -106,4 +110,4 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
 
 
 if __name__ == "__main__":
-    run_cts_from_placement("picorv32", 10, "clk")
+    run_cts_from_placement("picorv32", 5, "clk")

@@ -35,7 +35,7 @@ for folder in cts_folders:
 
     # Skip if files don't exist (maybe run failed)
     if not os.path.exists(json_path):
-        print(f"   ⚠️  Skipping {exp_id}: state_out.json not found.")
+        print(f" Skipping {exp_id}: state_out.json not found.")
         continue
 
     try:
@@ -53,14 +53,30 @@ for folder in cts_folders:
         # Extract ONLY what we care about
         # Use .get() to avoid crashing if a key is missing
         parsed_metrics = {
-            "skew_setup": m.get("clock__skew__worst_setup"),
-            "skew_hold":  m.get("clock__skew__worst_hold"),
-            "power_total": m.get("power__total"),
-            "wirelength": m.get("route__wirelength__estimated"),
-            "setup_slack": m.get("timing__setup__ws"),
-            "hold_slack": m.get("timing__hold__ws"),
-            "clock_buffers": m.get("design__instance__count__class:clock_buffer")
-        }
+        # Clock quality
+        "skew_setup": m.get("clock__skew__worst_setup"),
+        "skew_hold":  m.get("clock__skew__worst_hold"),
+
+        # Timing outcomes
+        "setup_slack": m.get("timing__setup__ws"),
+        "hold_slack":  m.get("timing__hold__ws"),
+        "setup_tns":   m.get("timing__setup__tns"),
+        "hold_tns":    m.get("timing__hold__tns"),
+        "setup_vio_count": m.get("timing__setup_vio__count"),
+        "hold_vio_count":  m.get("timing__hold_vio__count"),
+
+        # CTS structure
+        "clock_buffers":   m.get("design__instance__count__class:clock_buffer"),
+        "clock_inverters": m.get("design__instance__count__class:clock_inverter"),
+        "timing_repair_buffers": m.get("design__instance__count__class:timing_repair_buffer"),
+
+        # Cost signals
+        "wirelength":  m.get("route__wirelength__estimated"),
+        "power_total": m.get("power__total"),
+
+        # Placement fingerprint
+        "utilization": m.get("design__instance__utilization")
+    }
 
         # Add to list
         results.append({
@@ -69,7 +85,6 @@ for folder in cts_folders:
             "metrics": parsed_metrics
         })
 
-        print(f"   ✅ {exp_id}: Skew={parsed_metrics['skew_setup']}ns | Power={parsed_metrics['power_total']}W")
 
     except Exception as e:
         print(f"   ❌ {exp_id}: Error parsing JSON - {e}")
@@ -79,4 +94,3 @@ output_file = os.path.join(RUN_DIR, "dataset.json")
 with open(output_file, "w") as f:
     json.dump(results, f, indent=4)
 
-print(f"\n💾 Saved {len(results)} data points to: {output_file}")
