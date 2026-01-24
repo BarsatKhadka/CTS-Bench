@@ -110,4 +110,4 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
 
 
 if __name__ == "__main__":
-    run_cts_from_placement("picorv32", 5, "clk")
+    run_cts_from_placement("aes", 7.0, "clk")
