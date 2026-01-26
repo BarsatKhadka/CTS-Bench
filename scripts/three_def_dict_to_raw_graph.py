@@ -18,6 +18,14 @@ for key in sample:
     print(key, design_data[key])
 print(len(design_data))
 
+# # Assuming your dictionary is named design_data
+# target_key = "_66290_"
+
+# if target_key in design_data:
+#     print(f"{target_key}: {design_data[target_key]}")
+# else:
+#     print(f"Key {target_key} not found in design data.")
+
 
 def build_gnn_tensors(design_data):
     # 1. Map gate names to integer IDs (0 to N-1)

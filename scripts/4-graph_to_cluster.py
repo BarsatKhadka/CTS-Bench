@@ -17,7 +17,12 @@ if len(sys.argv) < 2:
 
 FILENAME = sys.argv[1]  # Takes the argument passed from Bash
 
-design_data  = process_design(FILENAME, clock_port="clk")
+design_name = FILENAME.split("_")[0]
+
+if design_name in ["picorv32", "aes" , "sha256"] :
+    design_data = process_design(FILENAME, clock_port="clk")
+else:
+    design_data  = process_design(FILENAME, clock_port="wb_clk_i")
 
 
 #aggregate flops and their one hop neighbors
@@ -202,6 +207,7 @@ def merge_atomic_clusters(atomic_clusters , raw_edges , dist_limit=0.1 , gravity
                 # (Logic to combine centroids, members, etc.)
                 final_clusters.append(create_macro_cluster(current_group))
 
+
     print(f"Physics Merge Complete. Total Merges: {merged_count}")
     print(f"Final Macro Clusters: {len(final_clusters)}")
     return final_clusters          
@@ -363,6 +369,8 @@ def make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME
     os.makedirs(save_dir, exist_ok=True)
     output_path = os.path.join(save_dir, f"{FILENAME}_clustered.pt")
     torch.save(data, output_path)
+
+    
         
     print(f"✅ Saved Graph: {output_path}")
     print(f"   - Nodes: {data.num_nodes}")
@@ -370,6 +378,7 @@ def make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME
 
 
 make_final_graph(final_clusters, unique_macro_edges, output_name=f"{FILENAME}.pt")
+
 
 
 # import torch
