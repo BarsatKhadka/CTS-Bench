@@ -20,7 +20,12 @@ DESIGN_CONFIG = {
         "tb_file": "tb_aes.v",
         "vcd_file": "tb_aes.vcd", 
         "needs_firmware": False # AES is hardware-only, no C code needed
-    }
+    },
+        "ethmac": {
+        "tb_file": "tb_eth_top.v",    
+        "vcd_file": "testbench.vcd",  # 
+        "needs_firmware": False
+    } 
 }
 
 
@@ -63,16 +68,38 @@ def run_command(cmd, cwd=None):
 
 
 
+# Define include directories based on your file structure
+TB_INCLUDE = os.path.join(DESIGN_SRC_DIR, "tb")
+RTL_INCLUDE = os.path.join(DESIGN_SRC_DIR, "rtl") 
+TB_COP_PATH = os.path.join(DESIGN_SRC_DIR, "tb", "tb_cop.v")
+
+# Missing module definitions
+ETH_COP_PATH = os.path.join(DESIGN_SRC_DIR, "rtl", "eth_cop.v") # Defines eth_cop
+
+
+# Start with the base command components
 iverilog_cmd = [
     "iverilog",
     "-o", SIM_EXEC,
     "-DFUNCTIONAL",
-    "-DUNIT_DELAY=#1",
-    TESTBENCH_PATH,
-    NETLIST_PATH,
-    PRIMITIVES_PATH,
-    SKY130_PATH
+    "-DUNIT_DELAY=#1"
 ]
+
+# Add include paths ONLY for ethmac to keep other designs robust
+if DESIGN_NAME == "ethmac":
+    iverilog_cmd.extend([
+        "-I", TB_INCLUDE, 
+        "-I", RTL_INCLUDE
+    ])
+
+# append if ethmac
+iverilog_cmd.extend([
+    TESTBENCH_PATH,   
+    NETLIST_PATH,     
+    PRIMITIVES_PATH,  
+    SKY130_PATH       
+])
+
 
 # 1. Compile with Iverilog
 run_command(iverilog_cmd)

@@ -63,7 +63,7 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
     BASE = FILENAME
     try:
         base_state = load_snapshot(BASE)
-        for i in range(10):
+        for i in range(1):
             knobs = {
                    "CTS_SINK_CLUSTERING_MAX_DIAMETER": random.randint(35, 70),
 
@@ -110,4 +110,4 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
 
 
 if __name__ == "__main__":
-    run_cts_from_placement("aes", 7.0, "clk")
+    run_cts_from_placement("ethmac", 10.0, "clk")

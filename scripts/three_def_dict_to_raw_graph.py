@@ -7,8 +7,12 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 FILENAME = sys.argv[1]
+design_name = FILENAME.split("_")[0]
 
-design_data  = process_design(FILENAME, clock_port="clk")
+if design_name in ["picorv32", "aes" , "sha256"] :
+    design_data = process_design(FILENAME, clock_port="clk")
+else:
+    design_data  = process_design(FILENAME, clock_port="wb_clk_i")
 sample = random.sample(list(design_data.keys()), 10)
 for key in sample:
     print(key, design_data[key])
