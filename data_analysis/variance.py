@@ -6,8 +6,19 @@ import seaborn as sns
 # --- CONFIGURATION ---
 DATASET_ROOT = "./dataset_root"
 CSV_FILES = [
-    os.path.join(DATASET_ROOT, "experiment_log.csv"),
-    os.path.join(DATASET_ROOT, "picorv32_batch1.csv")
+    os.path.join(DATASET_ROOT, "picorv32_batch1.csv"),
+    os.path.join(DATASET_ROOT, "picorv32_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch1.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch1.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch2.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch4.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch1.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch2.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch3.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch4.csv")
 ]
 OUTPUT_REPORT = "dataset_full_stats_report.txt"
 OUTPUT_PLOT = "dataset_full_distributions.png"
@@ -34,6 +45,7 @@ def main():
         'setup_slack', 
         'setup_tns',       # Total Negative Slack (Sum of all failures)
         'setup_vio_count', # How many paths failed?
+        'skew_setup',      # Critical for setup fixes
         
         # Hold Timing
         'hold_slack', 

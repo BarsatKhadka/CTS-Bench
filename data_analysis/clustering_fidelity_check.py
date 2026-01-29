@@ -1,114 +1,228 @@
 import os
 import pandas as pd
-import torch
-import matplotlib.pyplot as plt
 import seaborn as sns
-from torch_geometric.data import Data
+import matplotlib.pyplot as plt
+import numpy as np
+from math import pi
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 # --- CONFIGURATION ---
 DATASET_ROOT = "./dataset_root"
-CSV_FILES = [
-    os.path.join(DATASET_ROOT, "experiment_log.csv"),
-    os.path.join(DATASET_ROOT, "picorv32_batch1.csv")
-]
-OUTPUT_PLOT = "clustering_fidelity_check.png"
+OUTPUT_ROOT = "clustering_outputs"  # Root folder for all results
 
-def get_graph_stats(path):
-    """Loads graph and returns basic topology stats."""
-    try:
-        # FIX: weights_only=False for security check bypass
-        data = torch.load(path, weights_only=False)
+# Fixed the missing comma in the list below
+CSV_FILES = [
+    os.path.join(DATASET_ROOT, "picorv32_batch1.csv"),
+    os.path.join(DATASET_ROOT, "picorv32_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch1.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch1.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch2.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch4.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch1.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch2.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch3.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch4.csv")
+]
+
+def make_radar_chart(df, categories, title, save_path):
+    """Generates a Radar Chart for the Cluster Centroids."""
+    if df.empty:
+        print(f"⚠️ Skipping Radar Chart for {title} (Not enough data)")
+        return
+
+    N = len(categories)
+    angles = [n / float(N) * 2 * pi for n in range(N)]
+    angles += angles[:1]
+    
+    plt.figure(figsize=(10, 10))
+    ax = plt.subplot(111, polar=True)
+    
+    plt.xticks(angles[:-1], categories, color='grey', size=10)
+    ax.set_rlabel_position(0)
+    plt.yticks([0.25, 0.5, 0.75], ["25%", "50%", "75%"], color="grey", size=7)
+    plt.ylim(0, 1)
+    
+    colors = {"Golden (Clean)": "green", "Marginal": "orange", "Broken": "red"}
+    
+    for idx, row in df.iterrows():
+        label = row['Label']
+        values = row[categories].values.flatten().tolist()
+        values += values[:1]
         
-        num_nodes = data.num_nodes
-        num_edges = data.num_edges
-        avg_degree = num_edges / num_nodes if num_nodes > 0 else 0
+        color = colors.get(label, "blue")
+        ax.plot(angles, values, linewidth=2, linestyle='solid', label=label, color=color)
+        ax.fill(angles, values, color=color, alpha=0.1)
         
-        # Calculate Center of Mass (Mean of X, Y coords)
-        # Assuming pos is in the first 2 columns of x
-        pos_mean = data.x[:, :2].mean(dim=0).numpy()
-        print(pos_mean)
+    plt.title(title, size=15, y=1.1)
+    plt.legend(loc='upper right', bbox_to_anchor=(0.1, 0.1))
+    plt.savefig(save_path, dpi=300)
+    plt.close() # Close memory to prevent leaks in loop
+    print(f"✅ Radar Chart saved to {save_path}")
+
+def generate_plots_for_subset(valid_df, output_folder, run_name):
+    """Reusable function to generate plots for a specific subset of data."""
+    
+    # ensure folder exists
+    os.makedirs(output_folder, exist_ok=True)
+
+    # --- 1. Prepare Radar Data ---
+    radar_df = valid_df.copy()
+    min_max = MinMaxScaler()
+    
+    # Invert TNS so that "Larger = Worse" (consistent with other metrics)
+    radar_df['Setup Severity'] = -1 * radar_df['setup_tns']
+    radar_df['Hold Severity']  = -1 * radar_df['hold_tns']
+    
+    plot_feats_map = {
+        'Setup Severity': 'Setup Severity',
+        'Hold Severity': 'Hold Severity',
+        'setup_vio_count': 'Vio Count',
+        'wirelength': 'Wirelength',
+        'power_total': 'Power',
+        'clock_buffers': 'Buffers'
+    }
+    
+    cols_to_norm = list(plot_feats_map.keys())
+    
+    # Safety check: if standard deviation is 0 (all values same), minmax fails/warns
+    # We catch this by checking if dataframe is large enough
+    if len(radar_df) > 0:
+        radar_df[cols_to_norm] = min_max.fit_transform(radar_df[cols_to_norm])
+        radar_df = radar_df.rename(columns=plot_feats_map)
+        final_cats = list(plot_feats_map.values())
         
-        return {
-            "nodes": num_nodes,
-            "edges": num_edges,
-            "degree": avg_degree,
-            "cx": pos_mean[0],
-            "cy": pos_mean[1]
-        }
-    except Exception as e:
-        return None
+        radar_centers = radar_df.groupby('Label')[final_cats].mean().reset_index()
+        radar_path = os.path.join(output_folder, f"{run_name}_radar_profile.png")
+        make_radar_chart(radar_centers, final_cats, f"{run_name}: Cluster Profiles", radar_path)
+    
+    # --- 2. Box Plots ---
+    plt.figure(figsize=(15, 10))
+    plt.suptitle(f"{run_name}: Metric Distributions", fontsize=16)
+    metrics_to_plot = ['setup_tns', 'setup_vio_count', 'hold_tns', 'wirelength', 'power_total', 'clock_buffers']
+    
+    for i, col in enumerate(metrics_to_plot):
+        plt.subplot(2, 3, i+1)
+        sns.boxplot(data=valid_df, x="Label", y=col, 
+                    order=["Golden (Clean)", "Marginal", "Broken"],
+                    palette={"Golden (Clean)": "green", "Marginal": "orange", "Broken": "red"})
+        plt.title(col)
+        plt.xlabel("")
+        plt.xticks(rotation=15)
+        
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.92)
+    
+    box_path = os.path.join(output_folder, f"{run_name}_box_metrics.png")
+    plt.savefig(box_path, dpi=300)
+    plt.close()
+    print(f"✅ Box Plots saved to {box_path}")
+
 
 def main():
-    print("🔹 1. Loading Logs...")
+    print("🔹 1. Loading Data...")
     df_list = []
-    for f in CSV_FILES:
-        if os.path.exists(f):
-            df_list.append(pd.read_csv(f))
     
-    if not df_list: return
+    # Create Root Output Directory
+    if not os.path.exists(OUTPUT_ROOT):
+        os.makedirs(OUTPUT_ROOT)
+
+    for file_name in CSV_FILES:
+        # Extract Design Name from filename (e.g., "picorv32_batch1.csv" -> "picorv32")
+        # Logic: split by underscore, take first part
+        base_name = os.path.basename(file_name)
+        design_name = base_name.split('_')[0] 
+
+        if os.path.exists(file_name):
+            try:
+                temp_df = pd.read_csv(file_name)
+                temp_df['Design'] = design_name  # Tag the data
+                temp_df['SourceFile'] = base_name
+                df_list.append(temp_df)
+            except Exception as e:
+                print(f"⚠️ Error reading {file_name}: {e}")
+        else:
+            print(f"⚠️ File not found: {file_name}")
+            
+    if not df_list:
+        print("❌ No data found.")
+        return
+
     df = pd.concat(df_list, ignore_index=True)
     
-    # Drop duplicates to analyze unique placements only
-    unique_df = df.drop_duplicates(subset=['placement_id'])
-    print(f"   Analyzing {len(unique_df)} unique graph pairs...")
-
-    stats = []
-
-    print("🔹 2. Comparing Raw vs. Clustered...")
-    for idx, row in unique_df.iterrows():
-        raw_path = row['raw_graph_path']
-        cluster_path = row['cluster_graph_path']
-        
-        # Handle relative paths if needed
-        if not os.path.exists(raw_path): continue
-        if not os.path.exists(cluster_path): continue
-        
-        r_stats = get_graph_stats(raw_path)
-        c_stats = get_graph_stats(cluster_path)
-        
-        if r_stats and c_stats:
-            stats.append({
-                "placement_id": row['placement_id'],
-                "raw_nodes": r_stats['nodes'],
-                "cluster_nodes": c_stats['nodes'],
-                "compression_ratio": r_stats['nodes'] / c_stats['nodes'],
-                "raw_degree": r_stats['degree'],
-                "cluster_degree": c_stats['degree'],
-                "center_shift": ((r_stats['cx'] - c_stats['cx'])**2 + (r_stats['cy'] - c_stats['cy'])**2)**0.5
-            })
-
-    results = pd.DataFrame(stats)
+    # --- 2. Select Features ---
+    features = [
+        'setup_tns',        
+        'hold_tns',         
+        'setup_vio_count',  
+        'wirelength',       
+        'power_total',      
+        'clock_buffers'     
+    ]
     
-    # --- 3. Plotting the Fidelity Report ---
-    plt.figure(figsize=(14, 6))
+    X_raw = df[features].dropna()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_raw)
+    
+    # --- 3. Run Global K-Means (Context is important!) ---
+    # We cluster on ALL data first. This ensures "Broken" means the same thing
+    # for AES as it does for PicoRV32 (Global Standard).
+    
+    print("🔹 2. Running Global K-Means (k=3)...")
+    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+    clusters = kmeans.fit_predict(X_scaled)
+    
+    # Metrics
+    inertia = kmeans.inertia_
+    sil_score = silhouette_score(X_scaled, clusters)
+    print("\n📊 --- GLOBAL CLUSTERING METRICS ---")
+    print(f"   Inertia: {inertia:.2f}")
+    print(f"   Silhouette Score: {sil_score:.4f}")
+    print("------------------------------------------\n")
 
-    # Plot A: Compression Consistency
-    plt.subplot(1, 2, 1)
-    sns.scatterplot(data=results, x="raw_nodes", y="cluster_nodes", alpha=0.7)
-    # Add a "Perfect Linearity" reference line
-    m, b = np.polyfit(results["raw_nodes"], results["cluster_nodes"], 1)
-    plt.plot(results["raw_nodes"], m*results["raw_nodes"] + b, color="red", linestyle="--", label=f"Trend (Ratio ~ {results['compression_ratio'].mean():.1f}x)")
-    plt.title("Compression Consistency\n(Raw vs Clustered Node Count)")
-    plt.xlabel("Raw Nodes (Ground Truth)")
-    plt.ylabel("Clustered Nodes (Proxy)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    # --- 4. Labeling ---
+    df.loc[X_raw.index, 'Cluster'] = clusters
+    valid_df = df.dropna(subset=['Cluster'])
+    
+    # Define labels based on worst setup timing (setup_tns)
+    profile = valid_df.groupby('Cluster')[features].mean()
+    profile['abs_tns'] = profile['setup_tns'].abs()
+    sorted_clusters = profile.sort_values(by='abs_tns', ascending=True)
+    
+    cluster_names = {
+        sorted_clusters.index[0]: "Golden (Clean)",
+        sorted_clusters.index[1]: "Marginal",
+        sorted_clusters.index[2]: "Broken"
+    }
+    valid_df['Label'] = valid_df['Cluster'].map(cluster_names)
+    
+    # --- 5. Generate Outputs ---
+    
+    print("🔹 3. Generating Output Folders...")
 
-    # Plot B: Topology Preservation (Degree)
-    plt.subplot(1, 2, 2)
-    sns.histplot(results["cluster_degree"], kde=True, color="green", label="Clustered")
-    sns.histplot(results["raw_degree"], kde=True, color="blue", label="Raw")
-    plt.title("Topology Preservation\n(Average Node Degree Distribution)")
-    plt.xlabel("Avg Degree (Connections per Node)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    # A. Whole Run (All Designs Combined)
+    all_designs_dir = os.path.join(OUTPUT_ROOT, "00_ALL_DESIGNS")
+    print(f"\n   Processing: ALL DESIGNS -> {all_designs_dir}")
+    generate_plots_for_subset(valid_df, all_designs_dir, "All_Designs")
+    
+    # Save the labeled CSV for the whole run
+    valid_df.to_csv(os.path.join(all_designs_dir, "all_designs_labeled.csv"), index=False)
 
-    plt.tight_layout()
-    plt.savefig(OUTPUT_PLOT, dpi=300)
-    print(f"✅ Fidelity Report saved to {OUTPUT_PLOT}")
-    print(f"   Avg Compression Ratio: {results['compression_ratio'].mean():.2f}x")
-    print(f"   Avg Center Mass Shift: {results['center_shift'].mean():.4f} units")
+    # B. Per Design Loop
+    unique_designs = valid_df['Design'].unique()
+    
+    for design in unique_designs:
+        design_dir = os.path.join(OUTPUT_ROOT, design)
+        design_subset = valid_df[valid_df['Design'] == design]
+        
+        print(f"   Processing: {design} -> {design_dir}")
+        generate_plots_for_subset(design_subset, design_dir, design)
 
-import numpy as np # Needed for polyfit
+    print(f"\n✅ Done! Check the '{OUTPUT_ROOT}' directory.")
+
 if __name__ == "__main__":
-    main() 
+    main()

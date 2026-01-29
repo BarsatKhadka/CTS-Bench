@@ -10,7 +10,21 @@ from sklearn.metrics import silhouette_score
 
 # --- CONFIGURATION ---
 DATASET_ROOT = "./dataset_root"
-CSV_FILES = ["experiment_log.csv", "picorv32_batch1.csv"]
+CSV_FILES = [
+    os.path.join(DATASET_ROOT, "picorv32_batch1.csv"),
+    os.path.join(DATASET_ROOT, "picorv32_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch1.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch2.csv"),
+    os.path.join(DATASET_ROOT, "aes_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch1.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch2.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch3.csv"),
+    os.path.join(DATASET_ROOT, "sha256_batch4.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch1.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch2.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch3.csv"),
+    os.path.join(DATASET_ROOT, "ethmac_batch4.csv")
+]
 OUTPUT_RADAR = "cluster_radar_profile.png"
 OUTPUT_BOX = "cluster_metric_distributions.png"
 
