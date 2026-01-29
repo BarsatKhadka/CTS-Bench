@@ -110,4 +110,4 @@ def run_cts_from_placement(DESIGN, clock_period, clock_port):
 
 
 if __name__ == "__main__":
-    run_cts_from_placement("ethmac", 9.0, "wb_clk_i")
+    run_cts_from_placement("sha256", 9.0, "clk")

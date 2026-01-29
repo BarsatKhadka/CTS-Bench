@@ -19,13 +19,18 @@ DESIGN_CONFIG = {
     "aes": {
         "tb_file": "tb_aes.v",
         "vcd_file": "tb_aes.vcd", 
-        "needs_firmware": False # AES is hardware-only, no C code needed
+        "needs_firmware": False 
     },
         "ethmac": {
         "tb_file": "tb_eth_top.v",    
         "vcd_file": "testbench.vcd",  # 
         "needs_firmware": False
-    } 
+    } ,
+    "sha256": {
+        "tb_file": "tb_sha256.v",
+        "vcd_file": "tb_sha256.vcd",
+        "needs_firmware": False
+    }
 }
 
 

@@ -14,7 +14,7 @@ LOG_FILE = os.path.join(DATASET_ROOT, "experiment_log.csv")
 VENV_PYTHON = "./venv/bin/python3" 
 
 # Number of runs
-NUM_ITERATIONS = 20
+NUM_ITERATIONS = 50
 
 def setup_directories():
     os.makedirs(DATASET_ROOT, exist_ok=True)

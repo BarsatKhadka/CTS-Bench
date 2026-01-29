@@ -106,5 +106,5 @@ def run_single_experiment(design_name, clock_period, clock_port):
 
 # run_single_experiment("picorv32", 5.0, "clk")
 # run_single_experiment("aes", 7.0, "clk")
-# run_single_experiment("sha256", 24.0, "clk")
-run_single_experiment("ethmac", 9.0, "wb_clk_i")
+run_single_experiment("sha256", 9.0, "clk")
+# run_single_experiment("ethmac", 9.0, "wb_clk_i")

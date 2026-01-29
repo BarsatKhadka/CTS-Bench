@@ -159,45 +159,23 @@ module tb_sha256();
   //
   // Dump the state of the dump when needed.
   //----------------------------------------------------------------
-  task dump_dut_state;
+task dump_dut_state;
     begin
       $display("State of DUT");
       $display("------------");
+      // Hierarchical references like dut.tmp_read_data are breaking compilation.
+      // Commenting them out to allow the simulation (and VCD dump) to proceed.
+      /*
       $display("Inputs and outputs:");
-      $display("cs = 0x%01x, we = 0x%01x",
-               dut.cs, dut.we);
+      $display("cs = 0x%01x, we = 0x%01x", dut.cs, dut.we);
       $display("address = 0x%02x", dut.address);
-      $display("write_data = 0x%08x, read_data = 0x%08x",
-               dut.write_data, dut.read_data);
-      $display("tmp_read_data = 0x%08x", dut.tmp_read_data);
-      $display("");
-
-      $display("Control and status:");
-      $display("ctrl = 0x%02x, status = 0x%02x",
-               {dut.next_reg, dut.init_reg},
-               {dut.digest_valid_reg, dut.ready_reg});
-      $display("");
-
-      $display("Message block:");
-      $display("block0  = 0x%08x, block1  = 0x%08x, block2  = 0x%08x,  block3  = 0x%08x",
-               dut.block_reg[00], dut.block_reg[01], dut.block_reg[02], dut.block_reg[03]);
-//      $display("block4  = 0x%08x, block5  = 0x%08x, block6  = 0x%08x,  block7  = 0x%08x",
-//               dut.block_reg[04], dut.block_reg[05], dut.block_reg[06], dut.block_reg[07]);
-
-      $display("block8  = 0x%08x, block9  = 0x%08x, block10 = 0x%08x,  block11 = 0x%08x",
-               dut.block_reg[08], dut.block_reg[09], dut.block_reg[10], dut.block_reg[11]);
-      $display("block12 = 0x%08x, block13 = 0x%08x, block14 = 0x%08x,  block15 = 0x%08x",
-               dut.block_reg[12], dut.block_reg[13], dut.block_reg[14], dut.block_reg[15]);
-      $display("");
-
-      $display("Digest:");
+      ...
       $display("digest = 0x%064x", dut.digest_reg);
+      */
+      $display("Internal status dump skipped for compatibility.");
       $display("");
-
     end
-  endtask // dump_dut_state
-
-
+  endtask
   //----------------------------------------------------------------
   // reset_dut()
   //
@@ -696,6 +674,8 @@ module tb_sha256();
   //----------------------------------------------------------------
   initial
     begin : main
+      $dumpfile("tb_sha256.vcd");
+      $dumpvars(0, tb_sha256);
       $display("   -- Testbench for sha256 started --");
 
       init_sim();
