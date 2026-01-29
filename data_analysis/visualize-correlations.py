@@ -1,11 +1,18 @@
 import os
-import pandas as pd
+# --- CRITICAL FIX: Set Backend to 'Agg' FIRST ---
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt 
 import seaborn as sns
-import matplotlib.pyplot as plt
+# ------------------------------------------------
+
+import pandas as pd
 import numpy as np
 
 # --- CONFIGURATION ---
-DATASET_ROOT = "dataset_root"
+DATASET_ROOT = "./dataset_root"
+OUTPUT_ROOT = "correlation_outputs"
+
 CSV_FILES = [
     os.path.join(DATASET_ROOT, "picorv32_batch1.csv"),
     os.path.join(DATASET_ROOT, "picorv32_batch2.csv"),
@@ -21,60 +28,65 @@ CSV_FILES = [
     os.path.join(DATASET_ROOT, "ethmac_batch3.csv"),
     os.path.join(DATASET_ROOT, "ethmac_batch4.csv")
 ]
-OUTPUT_PLOT = "physics_correlation_matrix_full.png"
 
+# INPUTS (The Knobs you change)
+INPUT_KNOBS = [
+    'aspect_ratio', 
+    'core_util', 
+    'density', 
+    'cts_max_wire', 
+    'cts_buf_dist', 
+    'cts_cluster_size', 
+    'cts_cluster_dia'
+]
 
-def process_design(csv_paths, out_dir, design_name=None):
-    """Compute and save correlation heatmap for given csv_paths into out_dir."""
-    os.makedirs(out_dir, exist_ok=True)
-    out_plot = os.path.join(out_dir, f"physics_correlation_matrix_full{('_' + design_name) if design_name else ''}.png")
+# OUTPUTS (The Metrics you measure)
+OUTPUT_METRICS = [
+    # Timing - Setup
+    'skew_setup', 
+    'setup_slack', 
+    'setup_tns',
+    'setup_vio_count',
+    
+    # Timing - Hold
+    'skew_hold', 
+    'hold_slack', 
+    'hold_tns',
+    'hold_vio_count',
+    
+    # Physical / Power
+    'clock_buffers', 
+    'clock_inverters',
+    'wirelength', 
+    'power_total', 
+    'utilization'
+]
 
-    df_list = []
-    for f in csv_paths:
-        if os.path.exists(f):
-            try:
-                df_list.append(pd.read_csv(f))
-            except Exception:
-                pass
-    if not df_list:
-        print(f"❌ No CSV files loaded for design {design_name}.")
-        return
-    df = pd.concat(df_list, ignore_index=True)
+def generate_correlation_heatmap(df, output_folder, run_name):
+    """Generates a correlation heatmap (Inputs vs Outputs) for a specific subset."""
+    if df.empty: return
 
-    # Inputs / Outputs selection
-    inputs = [
-        'aspect_ratio', 
-        'core_util', 
-        'density', 
-        'cts_max_wire', 
-        'cts_buf_dist', 
-        'cts_cluster_size', 
-        'cts_cluster_dia'
-    ]
-    outputs = [
-        'skew_setup', 
-        'setup_slack', 
-        'setup_tns',
-        'setup_vio_count',
-        'skew_hold', 
-        'hold_slack', 
-        'hold_tns',
-        'hold_vio_count',
-        'clock_buffers', 
-        'clock_inverters',
-        'wirelength', 
-        'power_total', 
-        'utilization'
-    ]
-    valid_inputs = [c for c in inputs if c in df.columns]
-    valid_outputs = [c for c in outputs if c in df.columns]
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Filter valid columns
+    valid_inputs = [c for c in INPUT_KNOBS if c in df.columns]
+    valid_outputs = [c for c in OUTPUT_METRICS if c in df.columns]
+    
     if not valid_inputs or not valid_outputs:
-        print(f"Error: Could not find specified columns in CSV for {design_name}.")
+        print(f"   ⚠️ Skipping {run_name}: Missing columns.")
         return
+
+    # Select only the relevant columns
     subset = df[valid_inputs + valid_outputs]
-    corr_matrix = subset.corr(method='pearson')
+    
+    # Check for zero variance (if a column is constant, correlation is NaN)
+    # We fill NaNs with 0 to make the plot renderable, though they technically mean "undefined".
+    corr_matrix = subset.corr(method='pearson').fillna(0)
+    
+    # Slice the matrix: Rows = Inputs, Cols = Outputs
     heatmap_data = corr_matrix.loc[valid_inputs, valid_outputs]
 
+    # Plot
     plt.figure(figsize=(16, 10))
     sns.heatmap(
         heatmap_data, 
@@ -82,113 +94,66 @@ def process_design(csv_paths, out_dir, design_name=None):
         fmt=".2f", 
         cmap="coolwarm", 
         center=0,
+        vmin=-1, vmax=1,  # Fix scale from -1 to 1 for consistency
         linewidths=0.5, 
         linecolor='gray',
         cbar_kws={'label': 'Correlation Coefficient (Pearson)'}
     )
-    plt.title(f"Physical Design Physics: Input Knobs vs. Full Metrics Correlation ({design_name})")
+    
+    plt.title(f"{run_name}: Input Knobs vs. Metrics Correlation")
     plt.xlabel("Output Metrics (Performance)")
     plt.ylabel("Input Knobs (Constraints)")
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=45, ha='right') 
     plt.yticks(rotation=0)
     plt.tight_layout()
-    plt.savefig(out_plot, dpi=300)
+    
+    save_path = os.path.join(output_folder, f"{run_name}_correlation_matrix.png")
+    plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"✅ Correlation heatmap saved to {out_plot}")
+    print(f"   ✅ Heatmap saved to {save_path}")
 
 def main():
     print("🔹 1. Loading Data...")
     df_list = []
+    
+    if not os.path.exists(OUTPUT_ROOT):
+        os.makedirs(OUTPUT_ROOT)
+
     for f in CSV_FILES:
+        base_name = os.path.basename(f)
+        design_name = base_name.split('_')[0]
+        
         if os.path.exists(f):
-            print(f"   - Found {f}")
-            df_list.append(pd.read_csv(f))
-        else:
-            print(f"   ❌ Warning: File not found: {f}")
+            try:
+                temp_df = pd.read_csv(f)
+                temp_df['Design'] = design_name
+                df_list.append(temp_df)
+            except: pass
     
-    if not df_list:
-        print("No CSV files loaded. Exiting.")
+    if not df_list: 
+        print("❌ No data found.")
         return
 
-    df = pd.concat(df_list, ignore_index=True)
-    print(f"   Loaded {len(df)} total rows.")
-    
-    # --- 2. Select Columns to Correlate ---
-    
-    # INPUTS (The Knobs you change)
-    inputs = [
-        'aspect_ratio', 
-        'core_util', 
-        'density', 
-        'cts_max_wire', 
-        'cts_buf_dist', 
-        'cts_cluster_size', 
-        'cts_cluster_dia'
-    ]
-    
-    # OUTPUTS (The Metrics you measure)
-    outputs = [
-        # Timing - Setup
-        'skew_setup', 
-        'setup_slack', 
-        'setup_tns',
-        'setup_vio_count',
-        
-        # Timing - Hold
-        'skew_hold', 
-        'hold_slack', 
-        'hold_tns',
-        'hold_vio_count',
-        
-        # Physical / Power
-        'clock_buffers', 
-        'clock_inverters',
-        'wirelength', 
-        'power_total', 
-        'utilization'
-    ]
-    
-    # Filter to only columns that actually exist in the CSV (prevents crashes on typos)
-    valid_inputs = [c for c in inputs if c in df.columns]
-    valid_outputs = [c for c in outputs if c in df.columns]
-    
-    if not valid_inputs or not valid_outputs:
-        print("Error: Could not find specified columns in CSV.")
-        return
+    full_df = pd.concat(df_list, ignore_index=True)
+    print(f"   Loaded {len(full_df)} total data points.")
 
-    subset = df[valid_inputs + valid_outputs]
-    
-    # --- 3. Compute Correlation ---
-    print("🔹 2. Computing Correlations...")
-    # method='pearson' is standard. You could use 'spearman' for non-linear rank correlation.
-    corr_matrix = subset.corr(method='pearson')
-    
-    # Slice the matrix: Rows = Inputs, Cols = Outputs
-    heatmap_data = corr_matrix.loc[valid_inputs, valid_outputs]
+    # --- 2. Process ALL DESIGNS (Global) ---
+    print("\n🔹 2. Generating Global Heatmap...")
+    global_dir = os.path.join(OUTPUT_ROOT, "00_ALL_DESIGNS")
+    generate_correlation_heatmap(full_df, global_dir, "All_Designs")
 
-    # --- 4. Plot ---
-    plt.figure(figsize=(16, 10)) # Made figure wider to fit new columns
+    # --- 3. Process Per Design ---
+    print("\n🔹 3. Generating Per-Design Heatmaps...")
+    unique_designs = full_df['Design'].unique()
     
-    sns.heatmap(
-        heatmap_data, 
-        annot=True, 
-        fmt=".2f", 
-        cmap="coolwarm", 
-        center=0,
-        linewidths=0.5, 
-        linecolor='gray',
-        cbar_kws={'label': 'Correlation Coefficient (Pearson)'}
-    )
-    
-    plt.title("Physical Design Physics: Input Knobs vs. Full Metrics Correlation")
-    plt.xlabel("Output Metrics (Performance)")
-    plt.ylabel("Input Knobs (Constraints)")
-    plt.xticks(rotation=45, ha='right') # Rotate x labels for readability
-    plt.yticks(rotation=0)
-    plt.tight_layout()
-    
-    plt.savefig(OUTPUT_PLOT, dpi=300)
-    print(f"✅ Full Correlation Heatmap saved to {OUTPUT_PLOT}")
+    for design in unique_designs:
+        design_subset = full_df[full_df['Design'] == design]
+        design_dir = os.path.join(OUTPUT_ROOT, design)
+        
+        print(f"   Processing: {design} -> {design_dir}")
+        generate_correlation_heatmap(design_subset, design_dir, design)
+
+    print(f"\n✅ All Done! Check '{OUTPUT_ROOT}' directory.")
 
 if __name__ == "__main__":
     main()

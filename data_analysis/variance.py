@@ -1,10 +1,18 @@
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
+# --- CRITICAL FIX: Set Backend to 'Agg' FIRST ---
+import matplotlib
+matplotlib.use('Agg') 
+import matplotlib.pyplot as plt 
 import seaborn as sns
+# ------------------------------------------------
+
+import pandas as pd
+import numpy as np
 
 # --- CONFIGURATION ---
 DATASET_ROOT = "./dataset_root"
+OUTPUT_ROOT = "stats_outputs"
+
 CSV_FILES = [
     os.path.join(DATASET_ROOT, "picorv32_batch1.csv"),
     os.path.join(DATASET_ROOT, "picorv32_batch2.csv"),
@@ -20,90 +28,81 @@ CSV_FILES = [
     os.path.join(DATASET_ROOT, "ethmac_batch3.csv"),
     os.path.join(DATASET_ROOT, "ethmac_batch4.csv")
 ]
-OUTPUT_REPORT = "dataset_full_stats_report.txt"
-OUTPUT_PLOT = "dataset_full_distributions.png"
 
-def main():
-    print("🔹 1. Loading Data...")
-    df_list = []
-    for f in CSV_FILES:
-        if os.path.exists(f):
-            df_list.append(pd.read_csv(f))
+# The full list of metrics to analyze
+TARGET_METRICS = [
+    'utilization', 
+    'wirelength', 
+    'power_total',
     
-    if not df_list: return
-    df = pd.concat(df_list, ignore_index=True)
-    print(f"   Loaded {len(df)} total data points.")
+    # Setup Timing
+    'setup_slack', 
+    'setup_tns',       # Total Negative Slack
+    'setup_vio_count', 
+    'skew_setup',      
+    
+    # Hold Timing
+    'hold_slack', 
+    'hold_tns',
+    'hold_vio_count', 
+    'skew_hold',      
+    
+    # Resources
+    'clock_buffers', 
+    'clock_inverters', 
+    'timing_repair_buffers'
+]
 
-    # --- 2. Define ALL Metrics to Analyze ---
-    # The full list you requested:
-    target_metrics = [
-        'utilization', 
-        'wirelength', 
-        'power_total',
-        
-        # Setup Timing
-        'setup_slack', 
-        'setup_tns',       # Total Negative Slack (Sum of all failures)
-        'setup_vio_count', # How many paths failed?
-        'skew_setup',      # Critical for setup fixes
-        
-        # Hold Timing
-        'hold_slack', 
-        'hold_tns',
-        'hold_vio_count', 
-        'skew_hold',       # Critical for hold fixes
-        
-        # Resources / Effort
-        'clock_buffers', 
-        'clock_inverters', 
-        'timing_repair_buffers' # Buffers added specifically to fix hold times
-    ]
+def generate_stats_and_plots(df, output_folder, run_name):
+    """Generates statistics table and histogram plots for a specific subset."""
+    if df.empty: return
 
-    # Filter to only columns that actually exist
-    valid_metrics = [c for c in target_metrics if c in df.columns]
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Filter valid metrics for this specific subset
+    # (Some designs might have 0 variance in some columns, we still keep them to show that)
+    valid_metrics = [c for c in TARGET_METRICS if c in df.columns]
 
-    # --- 3. Generate Statistical Report ---
-    print("\n🔹 2. Calculating Variance Statistics...")
+    # --- 1. Statistics Report ---
     stats = df[valid_metrics].describe().T
     
-    # Calculate "Coefficient of Variation" (CV) = StdDev / Mean
-    # Note: For columns with mean near 0 (like TNS), CV might be huge/unstable, 
-    # but it's still useful to see the relative spread.
-    stats['CV (%)'] = (stats['std'] / stats['mean'].abs()) * 100
+    # Coefficient of Variation (CV) = StdDev / Mean
+    # Handle division by zero if mean is 0
+    stats['CV (%)'] = stats.apply(
+        lambda row: (row['std'] / abs(row['mean']) * 100) if row['mean'] != 0 else 0.0, axis=1
+    )
     
-    # Select columns for the report
     report_df = stats[['min', 'max', 'mean', 'std', 'CV (%)']]
     
-    print("\n--- FULL DATASET VARIANCE REPORT ---")
-    print(report_df.round(2))
-    
-    # Save to text file
-    with open(OUTPUT_REPORT, "w") as f:
+    report_path = os.path.join(output_folder, f"{run_name}_stats_report.txt")
+    with open(report_path, "w") as f:
+        f.write(f"--- STATISTICS REPORT: {run_name} ---\n")
+        f.write(f"Total Samples: {len(df)}\n\n")
         f.write(report_df.round(2).to_markdown())
-    print(f"\n✅ Report saved to {OUTPUT_REPORT}")
+    print(f"   ✅ Stats Report saved to {report_path}")
 
-    # --- 4. Plot Distributions ---
-    print("\n🔹 3. Generating Distribution Plots...")
-    
+    # --- 2. Distribution Plots ---
     num_plots = len(valid_metrics)
-    rows = (num_plots // 4) + 1  # 4 plots per row
+    rows = (num_plots // 4) + 1  
     
     plt.figure(figsize=(20, 4 * rows))
-    plt.suptitle("Full Dataset Diversity: Distribution of All Metrics", fontsize=20)
+    plt.suptitle(f"{run_name}: Metric Distributions", fontsize=20)
     
     for i, col in enumerate(valid_metrics):
         plt.subplot(rows, 4, i + 1)
         
-        # Color logic: Violations = Red, Slack = Orange, Physical = Blue
-        if "vio" in col or "tns" in col:
-            color = "firebrick"
-        elif "slack" in col:
-            color = "darkorange"
-        else:
-            color = "steelblue"
+        # Color logic
+        if "vio" in col or "tns" in col: color = "firebrick"
+        elif "slack" in col: color = "darkorange"
+        else: color = "steelblue"
         
-        sns.histplot(df[col], kde=True, color=color, bins=30)
-        
+        # Plot
+        try:
+            sns.histplot(df[col], kde=True, color=color, bins=30)
+        except Exception: 
+            # Fallback if singular matrix (all values same)
+            plt.hist(df[col], color=color, bins=30)
+
         plt.title(f"{col}")
         plt.xlabel(col)
         plt.ylabel("Count")
@@ -116,8 +115,54 @@ def main():
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.94)
-    plt.savefig(OUTPUT_PLOT, dpi=300)
-    print(f"✅ Distribution Plot saved to {OUTPUT_PLOT}")
+    
+    plot_path = os.path.join(output_folder, f"{run_name}_distributions.png")
+    plt.savefig(plot_path, dpi=300)
+    plt.close()
+    print(f"   ✅ Plots saved to {plot_path}")
+
+def main():
+    print("🔹 1. Loading Data...")
+    df_list = []
+    
+    if not os.path.exists(OUTPUT_ROOT):
+        os.makedirs(OUTPUT_ROOT)
+
+    for f in CSV_FILES:
+        base_name = os.path.basename(f)
+        design_name = base_name.split('_')[0]
+        
+        if os.path.exists(f):
+            try:
+                temp_df = pd.read_csv(f)
+                temp_df['Design'] = design_name
+                df_list.append(temp_df)
+            except: pass
+    
+    if not df_list: 
+        print("❌ No data found.")
+        return
+
+    full_df = pd.concat(df_list, ignore_index=True)
+    print(f"   Loaded {len(full_df)} total data points.")
+
+    # --- 2. Process ALL DESIGNS (Global) ---
+    print("\n🔹 2. Generating Global Report...")
+    global_dir = os.path.join(OUTPUT_ROOT, "00_ALL_DESIGNS")
+    generate_stats_and_plots(full_df, global_dir, "All_Designs")
+
+    # --- 3. Process Per Design ---
+    print("\n🔹 3. Generating Per-Design Reports...")
+    unique_designs = full_df['Design'].unique()
+    
+    for design in unique_designs:
+        design_subset = full_df[full_df['Design'] == design]
+        design_dir = os.path.join(OUTPUT_ROOT, design)
+        
+        print(f"   Processing: {design} -> {design_dir}")
+        generate_stats_and_plots(design_subset, design_dir, design)
+
+    print(f"\n✅ All Done! Check '{OUTPUT_ROOT}' directory.")
 
 if __name__ == "__main__":
     main()
