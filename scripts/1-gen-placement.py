@@ -34,7 +34,7 @@ def run_single_experiment(design_name, clock_period, clock_port):
     # getting all verilog files for the config
     if design_name in ["aes", "sha256", "ethmac"]:
         verilog_files = glob.glob(f"./designs/{design_name}/rtl/*.v")
-    elif design_name == "picorv32":
+    elif design_name == "picorv32" or design_name == "zipdiv":
         verilog_files = [f"./designs/{design_name}/rtl/{design_name}.v"]
 
     #randomizing some parameters
@@ -106,5 +106,6 @@ def run_single_experiment(design_name, clock_period, clock_port):
 
 # run_single_experiment("picorv32", 5.0, "clk")
 # run_single_experiment("aes", 7.0, "clk")
-run_single_experiment("sha256", 9.0, "clk")
+# run_single_experiment("sha256", 9.0, "clk")
 # run_single_experiment("ethmac", 9.0, "wb_clk_i")
+run_single_experiment("zipdiv", 5.0, "i_clk")

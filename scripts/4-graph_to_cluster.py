@@ -21,8 +21,10 @@ design_name = FILENAME.split("_")[0]
 
 if design_name in ["picorv32", "aes" , "sha256"] :
     design_data = process_design(FILENAME, clock_port="clk")
-else:
+elif design_name == "ethmac":
     design_data  = process_design(FILENAME, clock_port="wb_clk_i")
+elif design_name == "zipdiv":
+    design_data  = process_design(FILENAME, clock_port="i_clk")
 
 
 #aggregate flops and their one hop neighbors

@@ -30,7 +30,12 @@ DESIGN_CONFIG = {
         "tb_file": "tb_sha256.v",
         "vcd_file": "tb_sha256.vcd",
         "needs_firmware": False
-    }
+    },
+    "zipdiv": {
+        "tb_file": "tb_zipdiv.v",
+        "vcd_file": "tb_zipdiv.vcd",
+        "needs_firmware": False
+    },
 }
 
 

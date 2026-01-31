@@ -1,10 +1,10 @@
 {
-    "design_name": "sha256",
-    "aspect_ratio": 2.0,
-    "core_util": 68,
-    "density": 0.87,
-    "synth_strategy": "AREA 0",
+    "design_name": "zipdiv",
+    "aspect_ratio": 0.7,
+    "core_util": 55,
+    "density": 0.66,
+    "synth_strategy": "AREA 1",
     "io_mode": 1,
-    "time_driven": 0,
+    "time_driven": 1,
     "routability_driven": 1
 }
