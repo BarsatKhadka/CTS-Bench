@@ -4,7 +4,7 @@ import pandas as pd
 df = pd.read_csv('dataset_root/main_dataset.csv')
 
 # 1. Identify the 'Best Case' (Minima) for each specific design
-# This treats each architecture (AES, PicoRV32, etc.) as its own system environment
+# This treats each architecture as its own system environment
 design_baselines = df.groupby('design_name').agg({
     'skew_setup': 'min',
     'power_total': 'min',
@@ -15,24 +15,35 @@ design_baselines = df.groupby('design_name').agg({
     'wirelength': 'min_wl'
 })
 
-# Display the baselines (the 1.0 anchor points for your Pareto analysis)
-print("Design-Specific Anchor Points (Minima):")
-print(design_baselines)
-
-# 2. Merge these design-specific baselines back into the main data
+# Merge these design-specific baselines back into the main data
 df = df.merge(design_baselines, on='design_name')
 
-# 3. Calculate the Gap Ratios (Distance from the design-best)
-# 1.0 means the run is the best in its class; > 1.0 indicates a performance penalty
+# 2. Calculate the Gap Ratios
+# 1.0 means it is the best for that design; >1.0 means it is less efficient
 df['gap_skew'] = df['skew_setup'] / df['min_skew']
 df['gap_power'] = df['power_total'] / df['min_power']
 df['gap_wl'] = df['wirelength'] / df['min_wl']
 
-# Select relevant columns to view the results
-# This allows you to see how 'far' each run is from the best-case of its own design
-output_preview = df[['run_id', 'design_name', 'gap_skew', 'gap_power', 'gap_wl']]
-print("\nPreview of Normalized Gap Ratios:")
-print(output_preview.head(10))
+# 3. Identify the Primary Bottleneck per run
+# We find which of the three metrics has the LARGEST gap (deviated most from its best)
+df['max_gap'] = df[['gap_skew', 'gap_power', 'gap_wl']].max(axis=1)
 
-# Save the baseline-normalized data
-df.to_csv('clocknet_design_normalized.csv', index=False)
+# 4. Normalize by the Row Max (Bottleneck Normalization)
+# This forces the "Worst" metric in every row to be 1.0, highlighting the bottleneck
+df['norm_gap_skew'] = df['gap_skew'] / df['max_gap']
+df['norm_gap_power'] = df['gap_power'] / df['max_gap']
+df['norm_gap_wl'] = df['gap_wl'] / df['max_gap']
+
+# 5. Calculate Pareto Efficiency Score (Euclidean Distance from [1,1,1])
+# Lower is better (closer to the theoretical 'perfect' for that design)
+df['pareto_dist'] = ((df['gap_skew']-1)**2 + (df['gap_power']-1)**2 + (df['gap_wl']-1)**2)**0.5
+
+# Select and save the relevant benchmarking columns
+output_columns = [
+    'run_id', 'design_name', 'gap_skew', 'gap_power', 'gap_wl',
+    'norm_gap_skew', 'norm_gap_power', 'norm_gap_wl', 'pareto_dist'
+]
+
+df[output_columns].to_csv('clocknet_pareto_benchmarks.csv', index=False)
+
+print("Pareto Gap Analysis complete. Saved to 'clocknet_pareto_benchmarks.csv'")
