@@ -68,8 +68,59 @@ def build_cache(df, col_name):
     print(f"    ✅ Loaded {len(cache)} unique graphs into RAM.")
     return cache
 
-train_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest.csv"))
-test_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest_test.csv"))
 
-build_cache(train_df, 'raw_graph_path')
+class FusionModel(nn.Module):
+    def __init__(self, backbone, in_channels):
+        super().__init__()
+        # Branch 1: Graph (Geometry)
+        if backbone == 'GCN': self.gnn = GCNConv(in_channels, 64)
+        elif backbone == 'SAGE': self.gnn = SAGEConv(in_channels, 64)
+        elif backbone == 'GATv2': self.gnn = GATv2Conv(in_channels, 64, heads=1, edge_dim=1)
+        
+        # Branch 2 & 3: Knobs (Context)
+        self.place_mlp = nn.Sequential(nn.Linear(7, 32), nn.ReLU())
+        self.cts_mlp = nn.Sequential(nn.Linear(4, 32), nn.ReLU())
+        
+        # Fusion Head (Predictor)
+        self.head = nn.Sequential(nn.Linear(64+32+32, 64), nn.ReLU(), nn.Linear(64, 1))  
+        
+
+    def forward(self, data):
+        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
+        
+        if isinstance(self.gnn, GATv2Conv):
+            out = self.gnn(x, edge_index, edge_attr=edge_attr)
+        else:
+            out = self.gnn(x, edge_index)
+            
+        g = global_mean_pool(out.relu(), data.batch)
+        p = self.place_mlp(data.place_knobs)
+        c = self.cts_mlp(data.cts_knobs)
+        return self.head(torch.cat([g, p, c], dim=1))
+
+def benchmark(col_name, feat_dim, label):
+    train_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest.csv"))
+    test_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest_test.csv"))
+
+    cat_cols = ['synth_strategy']
+
+    for c in cat_cols:
+        cat_type = pd.CategoricalDtype(categories=train_df[c].unique())
+        train_df[c] = train_df[c].astype(cat_type).cat.codes
+        test_df[c]  = test_df[c].astype(cat_type).cat.codes
+
+
+    return train_df, test_df
+
+train_df, test_df = benchmark('raw_graph_path', feat_dim=10, label='Raw')
+
+
+
+
+
+
+
+
+
+
 
