@@ -50,6 +50,26 @@ class FusionDataset(Dataset):
         data.y = torch.tensor([row['pareto_dist']], dtype=torch.float).unsqueeze(0)
         return data
 
+def build_cache(df, col_name):
+    print(f"    Caching unique graphs from {col_name}...")
+    cache = {}
+    unique = df.drop_duplicates(subset='placement_id')
+    
+    for i, row in unique.iterrows():
+        path = row[col_name]
+    
+        if not os.path.exists(path):
+            print(f" Graph file missing: {path}")
+            return
+        
+        if os.path.exists(path):
+            cache[row['placement_id']] = torch.load(path, weights_only=False)
+            
+    print(f"    ✅ Loaded {len(cache)} unique graphs into RAM.")
+    return cache
 
+train_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest.csv"))
+test_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest_test.csv"))
 
+build_cache(train_df, 'raw_graph_path')
 
