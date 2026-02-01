@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load the main dataset containing all 4,360 data points
-df = pd.read_csv('dataset_root/dataset_without_gap.csv')
+df = pd.read_csv('dataset_root/test_zipdiv.csv')
 
 # 1. Establish design-specific baselines (The 'Theoretical Best' per architecture)
 design_baselines = df.groupby('design_name').agg({
@@ -37,6 +37,6 @@ df['pareto_dist'] = ((df['gap_skew']-1)**2 + (df['gap_power']-1)**2 + (df['gap_w
 
 # Save the unified dataset
 # This now contains: Original features + CTS metrics + Pareto Benchmarks
-df.to_csv('dataset_root/clocknet_unified_manifest.csv', index=False)
+df.to_csv('dataset_root/clocknet_unified_manifest_test.csv', index=False)
 
 print(f"Unified dataset created with {len(df.columns)} columns.")
