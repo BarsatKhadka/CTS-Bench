@@ -106,18 +106,15 @@ class FusionModel(nn.Module):
         return self.head(torch.cat([g, p, c], dim=1))
 
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-# --- 4. BENCHMARK ---
+
 def benchmark(col_name, feat_dim, label, hidden_dim=64, place_dim=32, cts_dim=16, lr=0.001):
     print(f"\n>>> STARTING WORKLOAD: {label}")
     full_train_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest.csv"))
     zero_shot_df = pd.read_csv(os.path.join(DATA_DIR, "clocknet_unified_manifest_test.csv"))
     train_df, val_df = train_test_split(full_train_df, test_size=0.2, random_state=42)
 
-    for c in ['synth_strategy']:
-        unique_vals = sorted(train_df[c].dropna().unique())
-        cat_type = pd.api.types.CategoricalDtype(categories=unique_vals, ordered=True)
-        for d in [train_df, val_df, zero_shot_df]:
-            d[c] = d[c].astype(cat_type).cat.codes
+    for d in [train_df, val_df, zero_shot_df]:
+        d['synth_strategy'] = d['synth_strategy'].astype('category').cat.codes
 
     cache = build_cache(full_train_df, col_name)
     cache.update(build_cache(zero_shot_df, col_name))
@@ -133,90 +130,70 @@ def benchmark(col_name, feat_dim, label, hidden_dim=64, place_dim=32, cts_dim=16
     for net in ['GCN', 'SAGE', 'GATv2']:
         print(f"  Profiling {net}...")
         log_data = []
-        # Reset peak memory specifically for this GNN run
         if DEVICE.type == 'cuda': torch.cuda.reset_peak_memory_stats()
         
-        try:
-            model = FusionModel(net, feat_dim, hidden_dim, 0.5, place_dim, cts_dim).to(DEVICE)
-            opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)
-            crit = nn.MSELoss()
+        model = FusionModel(net, feat_dim, hidden_dim, 0.5, place_dim, cts_dim).to(DEVICE)
+        opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)
+        crit = nn.MSELoss()
+        
+        start_time = time.time()
+        for epoch in range(1, 101):
+            model.train()
+            for batch in train_loader:
+                batch = batch.to(DEVICE); opt.zero_grad()
+                out = model(batch)
+                loss = crit(out, batch.y); loss.backward(); opt.step()
             
-            start_time = time.time()
-            for epoch in range(1, 101):
-                model.train()
-                for batch in train_loader:
-                    batch = batch.to(DEVICE); opt.zero_grad()
-                    out = model(batch)
-                    loss = crit(out, batch.y); loss.backward(); opt.step()
-                
-                def get_component_metrics(loader):
-                    model.eval(); p_list, t_list = [], []
-                    with torch.no_grad():
-                        for b in loader:
-                            b = b.to(DEVICE)
-                            p_list.append(model(b).cpu().numpy())
-                            t_list.append(b.y.cpu().numpy().reshape(-1, 3))
-                    
-                    p_all = np.concatenate(p_list, axis=0)
-                    t_all = np.concatenate(t_list, axis=0)
-                    r2_comp = r2_score(t_all, p_all, multioutput='raw_values')
-                    mae_comp = mean_absolute_error(t_all, p_all, multioutput='raw_values')
-                    return r2_comp, mae_comp, np.mean(r2_comp)
+            def get_component_metrics(loader):
+                model.eval(); p, t = [], []
+                with torch.no_grad(): 
+                    for b in loader:
+                        b = b.to(DEVICE)
+                        p.append(model(b).cpu().numpy())
+                        t.append(b.y.cpu().numpy().reshape(-1, 3))
+                p, t = np.concatenate(p), np.concatenate(t)
+                return r2_score(t, p, multioutput='raw_values'), mean_absolute_error(t, p, multioutput='raw_values')
 
-                s_r2s, s_maes, s_avg_r2 = get_component_metrics(val_loader)
-                u_r2s, u_maes, u_avg_r2 = get_component_metrics(zs_loader)
-                
-                elapsed = time.time() - start_time
-                epoch_log = {"Epoch": epoch, "Time": elapsed, "S_Avg_R2": s_avg_r2, "U_Avg_R2": u_avg_r2}
-                
-                for i, name in enumerate(target_names):
-                    epoch_log[f"S_R2_{name}"] = s_r2s[i]
-                    epoch_log[f"S_MAE_{name}"] = s_maes[i] # Added Seen MAE Logging
-                    epoch_log[f"U_R2_{name}"] = u_r2s[i]
-                    epoch_log[f"U_MAE_{name}"] = u_maes[i]
-                
-                log_data.append(epoch_log)
+            s_r2s, s_maes = get_component_metrics(val_loader)
+            u_r2s, u_maes = get_component_metrics(zs_loader)
 
-                if epoch % 10 == 0:
-                    print(f"    Ep {epoch}: Seen R2={s_avg_r2:.2f} | Unseen MAE(Sk/Po/Wi)={u_maes[0]:.4f}/{u_maes[1]:.4f}/{u_maes[2]:.4f}")
-
-            # Capture peak VRAM used during the entire 100-epoch run
-            mem_mb = torch.cuda.max_memory_allocated() / 1024**2 if DEVICE.type == 'cuda' else 0
-            best_zs = max(log_data, key=lambda x: x['U_Avg_R2'])
+            if epoch % 10 == 0 or epoch == 1:
+                print(f"  Ep {epoch:3d} | Seen R2: {np.mean(s_r2s):.3f} [Sk:{s_r2s[0]:.2f}/Po:{s_r2s[1]:.2f}/Wi:{s_r2s[2]:.2f}]")
+                print(f"         | Unseen R2: {np.mean(u_r2s):.3f} [Sk:{u_r2s[0]:.2f}/Po:{u_r2s[1]:.2f}/Wi:{u_r2s[2]:.2f}]")
+                print(f"         | Seen MAE (S/P/W): {s_maes[0]:.4f}, {s_maes[1]:.4f}, {s_maes[2]:.4f} | Unseen MAE: {u_maes[0]:.4f}, {u_maes[1]:.4f}, {u_maes[2]:.4f}")
+                print("-" * 80)
             
-            workload_summary.append({
-                "Graph": label, "Net": net, "VRAM_MB": f"{mem_mb:.1f}",
-                "Time_Total": f"{time.time() - start_time:.1f}s",
-                "Peak_U_R2_Avg": f"{best_zs['U_Avg_R2']:.3f}",
-                "U_R2_Skew": f"{log_data[-1]['U_R2_Skew']:.3f}",
-                "U_R2_Power": f"{log_data[-1]['U_R2_Power']:.3f}",
-                "U_R2_Wire": f"{log_data[-1]['U_R2_Wire']:.3f}",
-                "S_MAE_Wire_Final": f"{log_data[-1]['S_MAE_Wire']:.4f}"
-            })
-            pd.DataFrame(log_data).to_csv(f"full_log_{label}_{net}.csv", index=False)
+            epoch_log = {"Epoch": epoch, "Time": time.time()-start_time, "U_Avg_R2": np.mean(u_r2s)}
+            for i, name in enumerate(target_names):
+                epoch_log[f"S_MAE_{name}"] = s_maes[i]
+                epoch_log[f"U_R2_{name}"] = u_r2s[i]
+                epoch_log[f"U_MAE_{name}"] = u_maes[i]
+            log_data.append(epoch_log)
 
-        except Exception as e: print(f"Error {net}: {e}")
+        # --- STATISTICAL SUMMARY ---
+        log_df = pd.DataFrame(log_data)
+        mem_mb = torch.cuda.max_memory_allocated() / 1024**2 if DEVICE.type == 'cuda' else 0
+        
+        workload_summary.append({
+            "Graph": label, "Net": net, "VRAM_MB": f"{mem_mb:.1f}",
+            "Max_U_R2_Wire": f"{log_df['U_R2_Wire'].max():.3f}",  # Best Trend
+            "Min_U_MAE_Wire": f"{log_df['U_MAE_Wire'].min():.4f}", # Best Physical Accuracy
+            "Min_U_MAE_Power": f"{log_df['U_MAE_Power'].min():.4f}",
+            "Max_S_R2": f"{log_df['U_Avg_R2'].max():.3f}",
+            "Time_Total": f"{time.time() - start_time:.1f}s"
+        })
+        log_df.to_csv(f"full_log_{label}_{net}.csv", index=False)
             
     return workload_summary
 
 if __name__ == "__main__":
-    all_summaries = []
-
-    # 1. Clustered Run (High Capacity Config)
-    #    This proves efficiency (Low VRAM, Low Time)
-    c_summary = benchmark('cluster_graph_path', feat_dim=10, label="Clustered", 
-                          hidden_dim=16, place_dim=8, cts_dim=4, lr=0.0005)
-    all_summaries.extend(c_summary)
+    all_results = []
+    # Efficiency Run
+    all_results.extend(benchmark('cluster_graph_path', 10, "Clustered", 16, 8, 4, 0.0005))
+    # Accuracy Baseline
+    all_results.extend(benchmark('raw_graph_path', 4, "Raw", 64, 32, 16, 0.001))
     
-    # 2. Raw Run (Standard Config)
-    #    This proves accuracy vs cost trade-off
-    r_summary = benchmark('raw_graph_path', feat_dim=4, label="Raw", 
-                          hidden_dim=64, place_dim=32, cts_dim=16, lr=0.001)
-    all_summaries.extend(r_summary)
-    
-    # 3. Save Final Workload Table
-    df = pd.DataFrame(all_summaries)
-    df.to_csv("mlbench_workload_summary.csv", index=False)
-    
-    print("\n\n=== MLBENCH WORKLOAD SUMMARY ===")
-    print(df.to_string(index=False))
+    final_df = pd.DataFrame(all_results)
+    final_df.to_csv("mlbench_workload_summary.csv", index=False)
+    print("\n" + "="*95 + "\nFINAL MLBENCH CHARACTERIZATION (MIN/MAX OVER 100 EPOCHS)\n" + "="*95)
+    print(final_df.to_string(index=False))
