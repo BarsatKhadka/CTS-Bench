@@ -235,3 +235,201 @@ Located in `data_analysis/`:
 ---
 
 **Last Updated**: February 2026
+
+## Rebuilding the Dataset
+
+To regenerate the complete CTS-Bench dataset from scratch, follow these steps:
+
+### Prerequisites
+- Nix-shell with OpenLane, OpenROAD, TritonCTS, and Sky130 PDK
+- Python 3.8+ with required dependencies
+
+### Setup Instructions
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repo-url> cts-bench
+   cd cts-bench
+   ```
+
+2. **Enter nix-shell** (containerized environment):
+   ```bash
+   nix-shell
+   ```
+
+3. **Set up Python virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   ```
+
+4. **Install Python dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+
+5. **Run the full pipeline**:
+   ```bash
+   chmod +x run_scripts.sh
+   ./run_scripts.sh
+   ```
+
+   This executes:
+   - `scripts/1-gen-placement.py` - Generate placements with randomized knobs
+   - `scripts/2-gen-saif.py` - Extract switching activity (SAIF)
+   - `scripts/4-graph_to_cluster.py` - Build raw and clustered graph representations
+   - `scripts/5-run-cts.py` - Run multi-variant clock tree synthesis
+   - `scripts/6-parse-cts-reports.py` - Extract QoR metrics
+
+### Pipeline Stages
+
+| Stage | Script | Output |
+|-------|--------|--------|
+| **1** | `1-gen-placement.py` | Placement DEF files + knob configurations |
+| **2** | `2-gen-saif.py` | SAIF switching activity data |
+| **3** | `4-graph_to_cluster.py` | Raw & Clustered graph tensors (PyTorch Geometric) |
+| **4** | `5-run-cts.py` | Clock tree netlists + STA reports |
+| **5** | `6-parse-cts-reports.py` | QoR metrics (Skew, Power, Wirelength, etc.) |
+
+## Adding Custom Designs
+
+To add your own design to CTS-Bench:
+
+### Step 1: Prepare Design Files
+
+1. Create a new directory in `designs/`:
+   ```bash
+   mkdir -p designs/my_design
+   cd designs/my_design
+   ```
+
+2. Create `rtl/` and `tb/` subdirectories:
+   ```bash
+   mkdir rtl tb
+   ```
+
+3. Add your **RTL code** to `rtl/`:
+   ```bash
+   cp my_design.v rtl/
+   ```
+   
+   Ensure the module name matches your design directory name.
+
+4. Add your **testbench** to `tb/`:
+   ```bash
+   cp my_testbench.v tb/testbench.v
+   ```
+   
+   The testbench should:
+   - Match the module interface of your design
+   - Produce valid switching activity for SAIF generation
+   - Use a clock signal named according to your specification
+
+### Step 2: Generate Placement Data
+
+Run the placement generation script with your design:
+
+```bash
+# From the repository root (within venv)
+python scripts/1-gen-placement.py
+```
+
+Then call the placement generation function for your design:
+
+```python
+from scripts.script_1_gen_placement import run_single_experiment
+
+# Parameters: (design_name, clock_period_ns, clock_port_name)
+run_single_experiment(
+    design_name="my_design",
+    clock_period=10.0,           # in nanoseconds
+    clock_port_name="clk"        # your clock signal name
+)
+```
+
+This generates 486 unique placements by randomizing the knobs in `Table 1` of the paper.
+
+
+
+### Step 3: Run CTS Generation
+
+Run the CTS generation script:
+
+```bash
+python scripts/5-run-cts.py
+```
+
+Then call the CTS function for your design:
+
+```python
+from scripts.script_5_run_cts import run_cts_from_placement
+
+# Parameters: (design_name, clock_period_ns, clock_port_name)
+run_cts_from_placement(
+   design_name="my_design",
+   clock_period=10.0,           # must match placement step
+   clock_port_name="clk"        # must match placement step
+)
+```
+
+This generates 10 CTS variants per placement (4,860 total data points for your design).
+
+### Step 4: Complete the Pipeline
+
+Run the remaining stages (or use `./run_scripts.sh` to run all at once):
+
+```bash
+# Extract switching activity
+python scripts/2-gen-saif.py
+
+# Construct graphs (raw and clustered)
+python scripts/4-graph_to_cluster.py
+
+# Run CTS variants
+python scripts/5-run-cts.py
+
+# Parse CTS reports and extract metrics
+python scripts/6-parse-cts-reports.py
+```
+
+Or run all at once with your specified number of iterations:
+```bash
+python main.py
+```
+
+### Design Parameter Guidelines
+
+### Step 3: Run CTS Generation
+When adding a custom design, consider these parameters:
+
+### Design Parameter Guidelines
+
+When adding a custom design, consider these parameters:
+
+| Parameter | Example | Notes |
+|-----------|---------|-------|
+| **Design Name** | my_design | Used for folder naming; must be unique |
+| **Clock Period** | 10.0 ns | Determines timing constraints; adjust for your design frequency |
+| **Clock Port** | clk | Must match your RTL module's clock signal name |
+| **Gate Count** | 1,000–100,000 | Affects graph size and training efficiency |
+| **Cell Types** | Flip-flops, gates | Standard cells from Sky130 PDK |
+
+### Output Files for Custom Design
+
+After completion, you'll have:
+
+```
+dataset_root/
+├── my_design_batch1.csv          # QoR metrics for your design
+└── graphs/my_design/
+    ├── placement_0/
+    │   ├── raw_0.pt             # Raw graph for placement variant 0
+    │   ├── clustered_0.pt        # Clustered graph for placement variant 0
+    │   └── ...                   # (10 CTS variants each)
+    └── ...                       # (486 placements total)
+```
+
+
+
+This merges all design batches into `clocknet_unified_manifest.csv`.
