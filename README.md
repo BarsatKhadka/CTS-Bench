@@ -241,20 +241,21 @@ Located in `data_analysis/`:
 To regenerate the complete CTS-Bench dataset from scratch, follow these steps:
 
 ### Prerequisites
-- Nix-shell with OpenLane, OpenROAD, TritonCTS, and Sky130 PDK
+- Nix-shell with OpenLane2, OpenROAD, TritonCTS, and Sky130 PDK
 - Python 3.8+ with required dependencies
 
 ### Setup Instructions
 
-1. **Clone the repository**:
+1. **Enter the OpenLane nix-shell** (containerized environment):
+ Go to your openlane2 directory and
+   ```bash
+   nix-shell
+   ```
+
+2. **Clone the repository**:
    ```bash
    git clone <repo-url> cts-bench
    cd cts-bench
-   ```
-
-2. **Enter nix-shell** (containerized environment):
-   ```bash
-   nix-shell
    ```
 
 3. **Set up Python virtual environment**:
