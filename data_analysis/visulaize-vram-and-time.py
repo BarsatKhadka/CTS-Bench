@@ -24,7 +24,7 @@ ax.scatter(clustered_vram, clustered_time, s=55, c='#ff7f0e', marker='^',
 # Manual Annotations for Main Plot
 ax.annotate("GCN", (1145.7, 2264.3), xytext=(6, 6), textcoords="offset points", fontsize=8, fontweight='bold')
 ax.annotate("SAGE", (717.6, 1801.4), xytext=(6, 6), textcoords="offset points", fontsize=8, fontweight='bold')
-# Tightened blue GATv2
+# Blue GATv2 annotation
 ax.annotate("GATv2", (2499.6, 2106.4), xytext=(-38, 6), textcoords="offset points", fontsize=8, fontweight='bold')
 
 # Styling Main Axes
@@ -53,8 +53,8 @@ axins.xaxis.set_label_position('top')
 axins.annotate("SAGE", (39.3, 604.8), xytext=(6, -2), textcoords="offset points", fontsize=7, fontweight='bold')
 axins.annotate("GCN", (71.1, 740.7), xytext=(6, 2), textcoords="offset points", fontsize=7, fontweight='bold')
 
-# --- SHIFTED GATv2 LEFT ---
-# Changed xytext from (-35, -12) to (-42, -12) to drag it left
+# --- ORANGE GATV2 OFFSET ---
+# xytext shifted to (-16, -12) as per your request
 axins.annotate("GATv2", (145.7, 737.2), xytext=(-16, -12), textcoords="offset points", fontsize=7, fontweight='bold')
 
 # Zoom Limits
@@ -70,4 +70,9 @@ axins.text(0.7, 0.15, "Zoom", transform=axins.transAxes,
 mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5", linestyle="--", linewidth=0.8)
 
 plt.tight_layout()
+plt.savefig("efficiency_benchmark.pdf", format='pdf', bbox_inches='tight')
+# ----------------- EXPORT -----------------
+# dpi=300 ensures the image is high resolution for papers/presentations
+plt.savefig("efficiency_benchmark.png", dpi=300, bbox_inches='tight')
+
 plt.show()
