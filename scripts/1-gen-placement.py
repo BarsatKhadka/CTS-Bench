@@ -204,6 +204,9 @@ def run_single_experiment(design_name, clock_period, clock_port):
     with open(os.path.join(run_dir, "placement_stats.json"), "w") as f:
         json.dump(stats, f, indent=4)
 
+    with open("latest_stats.json", "w") as f:
+        json.dump(stats, f, indent=4)
+
     # Extract timing paths right after placement
     print("\n--- Extracting timing paths ---")
     extract_timing_paths(run_dir, design_name)
@@ -211,4 +214,4 @@ def run_single_experiment(design_name, clock_period, clock_port):
     print(f"Done: {tag}")
 
 
-run_single_experiment("aes", 5.0, "clk")
+run_single_experiment("picorv32", 5.0, "clk")
